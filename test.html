@@ -1,0 +1,95 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hot spots</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.css"/>
+    <script src="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js"></script>
+    <style>
+    #panorama {
+        width: 800px;
+        height: 600px;
+    }
+    .tooltip {
+        position: absolute;
+        display: none;
+        padding: 5px;
+        background-color: rgba(0, 0, 0, 0.7);
+        color: #fff;
+        font-size: 12px;
+        white-space: nowrap;
+    }
+    </style>
+</head>
+<body>
+
+<div id="panorama"></div>
+<div id="tooltip" class="tooltip"></div>
+<button onclick="addHotSpot()">Add Hot Spot</button>
+<div id="yawPitch"></div>
+
+<script>
+    var viewer = pannellum.viewer('panorama', {
+        "type": "equirectangular",
+        "panorama": "3.jpg",
+        "hotSpotDebug": true,
+        "hotSpots": []
+    });
+
+    var tooltipElement = document.getElementById('tooltip');
+    var yawPitchElement = document.getElementById('yawPitch');
+
+
+
+    function showHotSpotDebug(event) {
+        var hotSpotDebug = viewer.getConfig().hotSpotDebug;
+        if (!hotSpotDebug) return;
+
+        var x = event.clientX;
+        var y = event.clientY;
+
+        var pitch = viewer.getPitch();
+        var yaw = viewer.getYaw();
+
+        tooltipElement.textContent = 'Pitch: ' + pitch.toFixed(2) + ', Yaw: ' + yaw.toFixed(2);
+        tooltipElement.style.left = x + 'px';
+        tooltipElement.style.top = y + 'px';
+        tooltipElement.style.display = 'block';
+
+        yawPitchElement.textContent = 'Current Pitch: ' + pitch.toFixed(2) + ', Yaw: ' + yaw.toFixed(2);
+
+
+    }
+
+    function hideHotSpotDebug() {
+        tooltipElement.style.display = 'none';
+    }
+
+
+    function addHotSpot() {
+        var pitch = parseFloat(prompt("Enter pitch:"));
+        var yaw = parseFloat(prompt("Enter yaw:"));
+        var text = prompt("Enter text:");
+
+        var newHotSpot = {
+            "pitch": pitch,
+            "yaw": yaw,
+            "type": "info",
+            "text": text
+        };
+
+        viewer.addHotSpot(newHotSpot);
+    }
+
+
+
+    document.addEventListener('mousemove', showHotSpotDebug);
+    document.addEventListener('mouseout', hideHotSpotDebug);
+
+
+    
+</script>
+
+</body>
+</html>
