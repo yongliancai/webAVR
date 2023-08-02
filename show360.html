@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>360 Image Viewer</title>
+    <meta charset="utf-8">
+    <!-- Add Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-database.js"></script>
+
+    <style>
+        #image-container img {
+            width: 300px;
+            height: auto;
+            margin: 0 auto;
+            display: block;
+        }
+        #image-container p {
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="image-container"></div>
+
+    <script>
+    // Initialize Firebase
+    var config = {
+        apiKey: "AIzaSyC4NzV-q4dBn_IytInpXlbbhEPaHJU9ULk",
+        authDomain: "webavr-b9273.firebaseapp.com",
+        projectId: "webavr-b9273",
+        storageBucket: "webavr-b9273.appspot.com",
+        messagingSenderId: "240463881336",
+        appId: "1:240463881336:web:6642598bf894378f2ff98d",
+        measurementId: "G-6Q7ZQ22WJN"
+    };
+    firebase.initializeApp(config);
+
+    var mapname = getMapName();
+    var markerText = getMarkerText();
+    firebase.auth().onAuthStateChanged(function(user) {
+        if (user) {
+            var email = user.email;
+            var username = email.split('@')[0];
+            var dbRef = firebase.database().ref(username + "/map/" + mapname + "/markers/" + markerText);
+            
+            dbRef.once('value').then(function(snapshot) {
+                var imageContainer = document.getElementById('image-container');
+                snapshot.forEach(function(childSnapshot) {
+                    var childData = childSnapshot.val();
+                    if (childData.URL) {  // Check if URL is defined
+                        var imgElement = document.createElement('img');
+                        var textElement = document.createElement('p');
+
+                        imgElement.src = childData.URL;
+                        imgElement.onclick = function() { window.location.href = 'edit.html?name=' + encodeURIComponent(childSnapshot.key); };
+                        textElement.innerHTML = childSnapshot.key;  // Get the parent node name (URL's parent node)
+
+                        imageContainer.appendChild(imgElement);
+                        imageContainer.appendChild(textElement);
+                    }
+                });
+            });
+        }
+    });
+
+    function getMapName() {
+        return localStorage.getItem('imageName');
+    }
+    function getMarkerText() {
+        return localStorage.getItem('markerText');
+    }
+    </script>
+</body>
+</html>

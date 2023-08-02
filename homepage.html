@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>網站首頁</title>
+  <meta charset="utf-8">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+    }
+
+    h1 {
+      color: #333;
+    }
+
+    .button {
+      padding: 10px 20px;
+      font-size: 18px;
+      margin: 10px;
+    }
+
+    #mapButton {
+      background-color: #4CAF50;
+      color: #fff;
+    }
+
+    #universeButton {
+      background-color: #007BFF;
+      color: #fff;
+    }
+
+    #profileButton {
+      background-color: #FFC107;
+      color: #333;
+    }
+
+    #homepageButton {
+      background-color: #DC3545;
+      color: #fff;
+    }
+    #friendButton{
+      background-color: aquamarine;
+      color: #333;
+    }
+  </style>
+</head>
+<body>
+  <h1>歡迎來到網站首頁</h1>
+
+  <button class="button" id="mapButton" onclick="goToMap()">我的世界</button>
+  <button class="button" id="universeButton" onclick="goToUniverse()">大宇宙</button>
+  <button class="button" id="profileButton" onclick="goToProfile()">個人頭像</button>
+  <button class="button" id="homepageButton" onclick="goToHomepage()">首頁</button>
+  <button class="button" id="friendButton" onclick="goTOFriend()">好友功能</button>
+  <script>
+    function goToMap() {
+      window.location.href = "map.html";
+    }
+
+    function goToUniverse() {
+      window.location.href = "universe.html";
+    }
+
+    function goToProfile() {
+      window.location.href = "profile.html";
+    }
+
+    function goToHomepage() {
+      window.location.href = "homepage.html";
+    }
+    function goTOFriend(){
+      window.location.href = "test.html";
+    }
+  </script>
+</body>
+</html>

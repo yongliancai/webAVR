@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>圖片標記網頁</title>
+  <meta charset="utf-8">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+    }
+
+    #imageContainer {
+      position: relative;
+      margin-bottom: 20px;
+    }
+
+    #imageContainer img {
+      max-width: 500px;
+      max-height: 500px;
+    }
+
+    #markerList {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .marker {
+      position: absolute;
+      background-color: transparent;
+      border: 2px solid transparent;
+      cursor: pointer;
+      z-index: 3;
+    }
+
+    .marker:hover {
+      border-color: blue;
+    }
+
+    #uploadButton {
+      position: relative;
+      z-index: 4;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>圖片標記網頁</h1>
+
+  <div id="imageContainer">
+    <img id="uploadedImage" src="" alt="上傳的圖片">
+  </div>
+
+  <div id="markerList">
+    <button id="uploadButton" onclick="uploadImage()">上傳圖片</button>
+    <button onclick="startDrawing()">新增標記</button>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/8.7.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.7.1/firebase-storage.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.7.1/firebase-database.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.9.1/firebase-auth.js"></script>
+  <script>
+    // Initialize Firebase
+    var firebaseConfig = {
+      // 請填入您的 Firebase 設定
+      apiKey: "AIzaSyC4NzV-q4dBn_IytInpXlbbhEPaHJU9ULk",
+      authDomain: "webavr-b9273.firebaseapp.com",
+      projectId: "webavr-b9273",
+      storageBucket: "webavr-b9273.appspot.com",
+      messagingSenderId: "240463881336",
+      appId: "1:240463881336:web:6642598bf894378f2ff98d",
+      measurementId: "G-6Q7ZQ22WJN"
+    };
+    firebase.initializeApp(firebaseConfig);
+
+    var storage = firebase.storage();
+    var database = firebase.database();
+
+    var uploadedImage = document.getElementById('uploadedImage');
+    var markerList = document.getElementById('markerList');
+
+    var markers = [];
+    var isDrawing = false;
+    var startX, startY;
+    var endX, endY;
+    var imageName = '';
+    var user = firebase.auth().currentUser;
+    var imageName;
+    var username;
+    var email;
+    var markerText;
+    var downloadimgURL;
+
+    function uploadImage() {
+      var fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.accept = 'image/*';
+      fileInput.addEventListener('change', handleFileUpload);
+      fileInput.click();
+    }
+
+    function handleFileUpload(event) {
+      var file = event.target.files[0];
+      var storageRef = storage.ref('images/' + file.name);
+
+      storageRef.put(file)
+        .then(function (snapshot) {
+          console.log('上傳成功');
+          return snapshot.ref.getDownloadURL();
+        })
+        .then(function (downloadURL) {
+          uploadedImage.src = downloadURL;
+          console.log(downloadURL);
+          imageName = file.name.split('.')[0]; // 更新 imageName 變數
+          console.log('imageName:', imageName); // 添加調試輸出
+
+          var mapImgURL = {
+            "URL": downloadURL
+          }
+          var databaseRef = database.ref(username + "/map/" + imageName); // 設定資料庫路徑
+
+          // 檢查資料庫是否已存在相應的節點
+          databaseRef.once('value').then(function (snapshot) {
+            if (snapshot.exists()) {
+              // 如果節點存在，使用 update 方法更新資料
+              databaseRef.update(mapImgURL).then(function () {
+                console.log("更新URL節點成功");
+              }).catch(function (error) {
+                console.log("更新URL節點失敗:", error);
+              });
+            } else {
+              // 如果節點不存在，使用 set 方法創建新的資料節點
+              databaseRef.set(mapImgURL).then(function () {
+                console.log("創建URL節點成功");
+              }).catch(function (error) {
+                console.log("創建URL節點失敗:", error);
+              });
+            }
+          });
+        })
+        .catch(function (error) {
+          console.log('map圖片上傳失敗:', error);
+        });
+      loadMarkersFromDatabase();
+    }
+
+
+
+
+
+    function startDrawing() {
+      uploadedImage.addEventListener('mousedown', handleMouseDown);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+
+    function handleMouseDown(event) {
+      startX = event.clientX - uploadedImage.offsetLeft;
+      startY = event.clientY - uploadedImage.offsetTop;
+
+      isDrawing = true;
+
+      uploadedImage.removeEventListener('mousedown', handleMouseDown);
+      uploadedImage.addEventListener('mousemove', handleMouseMove);
+    }
+
+    function handleMouseMove(event) {
+      if (isDrawing) {
+        endX = event.clientX - uploadedImage.offsetLeft;
+        endY = event.clientY - uploadedImage.offsetTop;
+
+        var width = Math.abs(endX - startX);
+        var height = Math.abs(endY - startY);
+        var left = Math.min(startX, endX);
+        var top = Math.min(startY, endY);
+
+        // Remove previous markers
+        //markers.forEach(function (marker) {
+        //  marker.parentNode.removeChild(marker);
+        //});
+        //markers = [];
+
+        var rectangle = document.createElement('div');
+        rectangle.classList.add('marker');
+        rectangle.style.width = width + 'px';
+        rectangle.style.height = height + 'px';
+        rectangle.style.left = left + 'px';
+        rectangle.style.top = top + 'px';
+        rectangle.addEventListener('click', function (event) {
+          markerClicked(rectangle, event);
+        });
+        markerList.appendChild(rectangle);
+        markers.push(rectangle);
+      }
+    }
+
+    function handleMouseUp() {
+  if (isDrawing) {
+    isDrawing = false;
+
+    uploadedImage.removeEventListener('mousemove', handleMouseMove);
+    uploadedImage.addEventListener('mousedown', handleMouseDown);
+
+    var marker = markers[markers.length - 1];
+    var markerData = {
+      "width": marker.style.width,
+      "height": marker.style.height,
+      "left": marker.style.left,
+      "top": marker.style.top
+    };
+
+    // 提示用戶輸入標記點名稱
+    var markerText = prompt("輸入標記點名稱:");
+    console.log(markerText);
+
+    // 將 markerText 儲存為標記點元素的自訂屬性
+    marker.markerText = markerText;
+
+    var databaseRef = database.ref(username + "/map/" + imageName + "/markers/" + markerText + "/markerSize/"); // 設定資料庫路徑
+    databaseRef.set(markerData) // 創建節點
+      .then(function () {
+        console.log("創建節點成功");
+      })
+      .catch(function (error) {
+        console.log("創建節點失敗:", error);
+      });
+  }
+}
+
+function markerClicked(marker, event) {
+  if (event.button === 0) {
+    var confirmEdit = confirm('進入該標記點？');
+    if (confirmEdit) {
+      var markerText = marker.markerText; // 獲取標記點元素的 markerText 自訂屬性值
+      localStorage.setItem('imageName', imageName); // 替換為實際的圖片名稱
+      localStorage.setItem('markerText', markerText); // 將 markerText 儲存於 localStorage
+      window.location.href = 'edit.html';
+    }
+  }
+}
+
+
+    function loadMarkersFromDatabase() {
+      if (!imageName) {
+        console.log('圖像名稱為空');
+        return;
+      }
+        email = user.email;
+        username = email.split('@')[0];
+        var databaseRef = database.ref(username + "/map/" + imageName + "/markers/"); // 設定資料庫路徑
+        databaseRef.once('value')
+          .then(function (snapshot) {
+            var markerData = snapshot.val();
+            if (markerData) {
+              Object.values(markerData).forEach(function(marker) {
+              console.log("marker資料", marker);
+              var rectangle = document.createElement('div');
+              rectangle.classList.add('marker');
+              rectangle.style.width = markerData.width;
+              rectangle.style.height = markerData.height;
+              rectangle.style.left = markerData.left;
+              rectangle.style.top = markerData.top;
+              rectangle.addEventListener('click', function (event) {
+                markerClicked(rectangle, event);
+              });
+              markerList.appendChild(rectangle);
+              markers.push(rectangle);
+            })}
+          })
+          
+          .catch(function (error) {
+            console.log('讀取markers失敗:', error);
+          });
+    }
+    
+
+
+
+
+
+
+    window.addEventListener('DOMContentLoaded', function (event) {
+      loadMarkersFromDatabase();
+      firebase.auth().onAuthStateChanged(function(user) {
+      if (user) {
+        email = user.email;
+        username = email.split('@')[0];
+        console.log('当前用户:', username);
+      } else {
+        // 用户未登录或已注销
+        username = null;
+        console.log('当前用户: 未登录');
+      }
+    });
+    });
+  </script>
+</body>
+
+</html>

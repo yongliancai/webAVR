@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+    <html>
+      <head>
+        <script src='https://8x8.vc/vpaas-magic-cookie-748a0a5acc9c425f997f01ed416da927/external_api.js' async></script>
+        <style>html, body, #jaas-container { height: 100%; }</style>
+        <script type="text/javascript">
+            window.onload = () => {
+                const domain = "8x8.vc";
+                const options = {
+                    roomName: "vpaas-magic-cookie-748a0a5acc9c425f997f01ed416da927/SampleAppPureEntrancesProduceBarely",
+                    parentNode: document.querySelector('#jaas-container'),
+                    configOverwrite: {
+                        disableDeepLinking: true,
+                    },
+                    interfaceConfigOverwrite: {
+                        TOOLBAR_BUTTONS: [],
+                        SHOW_JITSI_WATERMARK: false,
+                        SHOW_WATERMARK_FOR_GUESTS: false
+                    },
+                    userInfo: {
+                        email: 'email@jitsiexamplemail.com',
+                        displayName: 'Jitsi User'
+                    }
+                };
+                const api = new JitsiMeetExternalAPI(domain, options);
+                    api.executeCommand('setAudioMuted', true);
+                    api.executeCommand('setVideoMuted', true);
+            }
+        </script>
+        
+      </head>
+      <body>
+        <div id="jaas-container"></div>
+      </body>
+    </html>

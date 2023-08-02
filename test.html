@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>好友制度和聊天室</title>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        /* ...CSS樣式... */
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f1f1f1;
+            margin: 0;
+            padding: 0;
+        }
+
+        #friendListContainer {
+            background-color: #fff;
+            width: 300px;
+            padding: 20px;
+            box-sizing: border-box;
+            height: 100%;
+            float: left;
+        }
+
+        #friendListContainer h2 {
+            margin-top: 0;
+        }
+
+        #friendList {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        #friendList li {
+            cursor: pointer;
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        #friendList li:last-child {
+            border-bottom: none;
+        }
+
+        #friendList li:hover {
+            background-color: #f9f9f9;
+        }
+
+        #chatContainer {
+            background-color: #fff;
+            margin-left: 320px;
+            padding: 20px;
+            box-sizing: border-box;
+            height: 100%;
+        }
+
+        #chatMessages {
+            height: 300px;
+            overflow-y: scroll;
+            padding: 10px;
+            border: 1px solid #ddd;
+            margin-bottom: 10px;
+        }
+
+        .message {
+            padding: 5px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+        }
+
+        .sent {
+            background-color: #e2eaff;
+            text-align: right;
+        }
+
+        .received {
+            background-color: #fff;
+            text-align: left;
+        }
+
+        #chatInputContainer {
+            display: flex;
+        }
+
+        #chatInput {
+            flex-grow: 1;
+            padding: 5px;
+        }
+
+        #chatButton {
+            padding: 5px 10px;
+            background-color: #4CAF50;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="friendListContainer">
+        <h2>好友列表</h2>
+        <ul id="friendList"></ul>
+
+        <!-- 新增加入好友的表單 -->
+        <div id="addFriendForm">
+            <input type="text" id="friendNameInput" placeholder="輸入好友的名稱或ID">
+            <button onclick="addFriend()">加入好友</button>
+        </div>
+    </div>
+
+    <div id="chatContainer">
+        <h2 id="chatUserName">聊天室</h2>
+        <div id="chatMessages"></div>
+        <form id="chatInputContainer">
+            <input type="text" id="chatInput" placeholder="輸入訊息">
+            <button type="submit" id="chatButton">送出</button>
+        </form>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/8.2.10/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.2.10/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.2.10/firebase-firestore.js"></script>
+    <script src="app.js"></script>
+    <script>
+        // ...JavaScript程式碼...
+    </script>
+</body>
+</html>
