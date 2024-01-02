@@ -2,74 +2,217 @@
 <html>
 <head>
     <title>360 Image Viewer</title>
-    <meta charset="utf-8">
-    <!-- Add Firebase SDKs -->
+    <meta charset="utf-8" />
+    
+    <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-database.js"></script>
 
+    <!-- Bootstrap CSS -->
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet" />
+    
+    <!-- Common CSS -->
+    <link rel="stylesheet" href="common.css" />
+
+    <!-- Inline CSS -->
     <style>
-        #image-container img {
+        .image-card {
             width: 300px;
-            height: auto;
-            margin: 0 auto;
-            display: block;
+            margin: 10px;
+            border: 1px solid #ccc;
+            box-shadow: 2px 2px 6px 0px #ccc;
         }
-        #image-container p {
+        .image-card img {
+            width: 100%;
+            height: 200px; /* Fixed height */
+            object-fit: cover; /* Cover entire space */
+        }
+        .card-body {
             text-align: center;
         }
     </style>
 </head>
 <body>
-    <div id="image-container"></div>
+    <!-- Header -->
+    <header>
+        <div class="logo">
+            <a href="#">
+                <img src="slogo.png" style="width: 50px; height: 50px" />
+            </a>
+        </div>
+        <nav>
+            <ul>
+                <li><a href="showCourse.html">編輯區</a></li>
+                <li><a href="universe.html">共享區</a></li>
+                <li><a href="personal.html">個人頁</a></li>
+                <li><a href="jistsi.html">直播</a></li>
+            </ul>
+        </nav>
+    </header>
 
+    <!-- Main Content -->
+    <h1>已建立360</h1>
+    <div class="container mt-5">
+        <div id="image-container" class="row"></div>
+    </div>
+
+    <!-- Firebase and Page Initialization Script -->
     <script>
-    // Initialize Firebase
-    var config = {
-        apiKey: "AIzaSyC4NzV-q4dBn_IytInpXlbbhEPaHJU9ULk",
-        authDomain: "webavr-b9273.firebaseapp.com",
-        projectId: "webavr-b9273",
-        storageBucket: "webavr-b9273.appspot.com",
-        messagingSenderId: "240463881336",
-        appId: "1:240463881336:web:6642598bf894378f2ff98d",
-        measurementId: "G-6Q7ZQ22WJN"
-    };
-    firebase.initializeApp(config);
+        // Initialize Firebase
+        var config = {
+            apiKey: "AIzaSyC4NzV-q4dBn_IytInpXlbbhEPaHJU9ULk",
+            authDomain: "webavr-b9273.firebaseapp.com",
+            projectId: "webavr-b9273",
+            storageBucket: "webavr-b9273.appspot.com",
+            messagingSenderId: "240463881336",
+            appId: "1:240463881336:web:6642598bf894378f2ff98d",
+            measurementId: "G-6Q7ZQ22WJN"
+        };
+        firebase.initializeApp(config);
 
-    var mapname = getMapName();
-    var markerText = getMarkerText();
-    firebase.auth().onAuthStateChanged(function(user) {
-        if (user) {
-            var email = user.email;
-            var username = email.split('@')[0];
-            var dbRef = firebase.database().ref(username + "/map/" + mapname + "/markers/" + markerText);
-            
-            dbRef.once('value').then(function(snapshot) {
-                var imageContainer = document.getElementById('image-container');
-                snapshot.forEach(function(childSnapshot) {
-                    var childData = childSnapshot.val();
-                    if (childData.URL) {  // Check if URL is defined
-                        var imgElement = document.createElement('img');
-                        var textElement = document.createElement('p');
 
-                        imgElement.src = childData.URL;
-                        imgElement.onclick = function() { window.location.href = 'edit.html?name=' + encodeURIComponent(childSnapshot.key); };
-                        textElement.innerHTML = childSnapshot.key;  // Get the parent node name (URL's parent node)
 
-                        imageContainer.appendChild(imgElement);
-                        imageContainer.appendChild(textElement);
-                    }
-                });
+
+        function checkIfUserIsStudent(userId, callback) {
+    console.log("正在檢查用戶角色，用戶ID：" + userId);
+    var studentRef = firebase.database().ref('userRoles/student/' + userId);
+    
+    studentRef.once('value', function(snapshot) {
+        if (snapshot.exists()) {
+            console.log("用戶是學生");
+            callback(true);
+        } else {
+            console.log("用戶不是學生，檢查是否為老師");
+            var teacherRef = firebase.database().ref('userRoles/teacher/' + userId);
+            teacherRef.once('value', function(snapshot) {
+                if (snapshot.exists()) {
+                    console.log("用戶是老師");
+                    callback(false);
+                } else {
+                    console.log("用戶既不是學生也不是老師");
+                    callback(false);
+                }
             });
         }
     });
+}
 
-    function getMapName() {
-        return localStorage.getItem('imageName');
-    }
-    function getMarkerText() {
-        return localStorage.getItem('markerText');
-    }
+        function hideAddCardAndModifyButtons() {
+            // 隱藏新增360圖片的卡片
+            var addImageCard = document.getElementById("addImageButton");
+            if (addImageCard) {
+                addImageCard.style.display = 'none';
+            }
+
+            // 修改現有360圖片卡片上的按鈕
+            document.querySelectorAll('.image-card .card-body').forEach(function(cardBody) {
+                // 隱藏除了進入360按鈕之外的所有按鈕
+                cardBody.querySelectorAll('button').forEach(function(button) {
+                    button.style.display = 'none';
+                });
+
+                // 添加或修改進入360按鈕
+                var enter360Button = cardBody.querySelector('.edit-course-btn');
+                if (enter360Button) {
+                    enter360Button.innerText = '進入360';
+                    enter360Button.style.display = 'block';
+                } else {
+                    // 如果沒有進入360按鈕，創建一個新的
+                    var newButton = document.createElement('button');
+                    newButton.className = 'btn btn-primary';
+                    newButton.innerText = '進入360';
+                    cardBody.appendChild(newButton);
+                }
+            });
+        }
+
+
+
+       // Firebase Authentication State Change
+        firebase.auth().onAuthStateChanged(function(user) {
+            if (user) {
+                var email = user.email;
+                var username = email.split('@')[0];
+                console.log("username："+username);
+                var dbRef = firebase.database().ref(username + "/360/");
+                var imageContainer = document.getElementById('image-container');
+                checkIfUserIsStudent(username, function(isStudent) {
+
+                    // Retrieve and Display Maps
+                    dbRef.once('value').then(function(snapshot) {
+                        var imageContainer = document.getElementById('image-container');
+                        snapshot.forEach(function(childSnapshot) {
+                            var childData = childSnapshot.val();
+                            if (childData.URL) {
+                                // Create Bootstrap Column
+                                var colElement = document.createElement('div');
+                                colElement.className = 'col-md-4';
+
+                                // Create Card Element
+                                var cardElement = document.createElement('div');
+                                cardElement.className = 'card image-card';
+                                cardElement.innerHTML = `
+                                    <img src="${childData.URL}" alt="${childSnapshot.key}" class="card-img-top">
+                                    <div class="card-body">
+                                        <h5 class="card-title">${childSnapshot.key}</h5>
+                                        <button class="btn btn-primary edit-course-btn mt-2 mb-2" data-mapname="${childSnapshot.key}">編輯</button>
+                                        <button class="btn btn-danger mt-2 mb-2">刪除</button>
+                                        <button class="btn btn-success mt-2 mb-2">作答狀況</button>
+                                        <button class="btn btn-warning mt-2 mb-2">轉QRcode</button>
+                                    </div>
+                                `;
+                                colElement.appendChild(cardElement);
+                                imageContainer.appendChild(colElement);
+                                // Add 'Edit' Button Event Listeners
+                                document.querySelectorAll('.edit-course-btn').forEach(function(btn) {
+                                    btn.addEventListener('click', function() {
+                                        var AroundImgName = btn.getAttribute('data-mapname'); // Get the map name from the button
+                                        window.location.href = "360photo.html?AroundImgName=" + AroundImgName; // Pass the map name as a query parameter
+                                    });
+                                });
+
+                                if (!isStudent) {
+                                    // 如果是老師，添加新增360圖片的卡片
+                                    //
+                                } else {
+                                    // 如果是學生，隱藏按鈕並修改現有按鈕
+                                    hideAddCardAndModifyButtons();
+                                }
+                            }
+                        });
+                    });
+                    if (!isStudent) {
+                    // 如果是老師，添加新增360圖片的卡片
+                    addNewImageCard();          //
+                } 
+                });
+                
+                
+            }
+
+        });
+
+        function addNewImageCard() {
+            var imageContainer = document.getElementById('image-container');
+            var addImageCard = document.createElement("div");
+            addImageCard.className = "card image-card";
+            addImageCard.innerHTML = `
+                <div class="card-body text-center">
+                    <h5 class="card-title">新增360圖片</h5>
+                    <button id="addImageButton" class="btn btn-primary">新增</button>
+                </div>
+            `;
+            imageContainer.appendChild(addImageCard);
+            localStorage.removeItem('recentImageUrl');
+
+            // 為新增按鈕添加事件監聽器
+            document.getElementById("addImageButton").addEventListener("click", function() {
+                window.location.href = "360photo.html?AroundImgName=" + "null"; 
+            });
+        }
+
+        
     </script>
 </body>
 </html>

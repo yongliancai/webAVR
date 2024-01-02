@@ -2,7 +2,6 @@
     <html>
       <head>
         <script src='https://8x8.vc/vpaas-magic-cookie-748a0a5acc9c425f997f01ed416da927/external_api.js' async></script>
-        <style>html, body, #jaas-container { height: 100%; }</style>
         <script type="text/javascript">
             window.onload = () => {
                 const domain = "8x8.vc";
@@ -27,9 +26,42 @@
                     api.executeCommand('setVideoMuted', true);
             }
         </script>
-        
+        <link rel="stylesheet" href="common.css">
+        <style>
+            html, body {
+                height: 100%;
+                margin: 0;
+                display: flex;
+                flex-direction: column;
+            }
+
+            header {
+                flex: 0 0 60px;
+            }
+
+            #jaas-container {
+                flex: 1;
+            }
+
+        </style>
       </head>
       <body>
+        <header>
+            <div class="logo">
+                <a href="#">
+                    <img src="slogo.png" style="width:50px; height:50px;">
+                </a>
+            </div>
+            <nav>
+                <ul class="navList">
+                    <li><a href="showCourse.html">編輯區</a></li>
+                    <li><a href="universe.html">共享區</a></li>
+                    <li><a href="personal.html">個人頁</a></li>
+                    <li><a href="jistsi.html">直播</a></li>
+                    <li id="userLoginStatus"><a href="#" id="loginLink">登入</a></li>
+                </ul>
+            </nav>
+        </header>
         <div id="jaas-container"></div>
       </body>
     </html>

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>360 Image Viewer</title>
+    <meta charset="utf-8" />
+    
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-database.js"></script>
+
+    <!-- Bootstrap CSS -->
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet" />
+    
+    <!-- Common CSS -->
+    <link rel="stylesheet" href="common.css" />
+
+    <!-- Inline CSS -->
+    <style>
+        .image-card {
+            width: 300px;
+            margin: 10px;
+            border: 1px solid #ccc;
+            box-shadow: 2px 2px 6px 0px #ccc;
+        }
+        .image-card img {
+            width: 100%;
+            height: 200px; /* Fixed height */
+            object-fit: cover; /* Cover entire space */
+        }
+        .card-body {
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <div class="logo">
+            <a href="#">
+                <img src="slogo.png" style="width: 50px; height: 50px" />
+            </a>
+        </div>
+        <nav>
+            <ul>
+                <li><a href="showCourse.html">編輯區</a></li>
+                <li><a href="universe.html">共享區</a></li>
+                <li><a href="personal.html">個人頁</a></li>
+                <li><a href="jistsi.html">直播</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <!-- Main Content -->
+    <h1>已建立地圖</h1>
+    <div class="container mt-5">
+        <div id="image-container" class="row"></div>
+    </div>
+
+    <!-- Firebase and Page Initialization Script -->
+    <script>
+        // Initialize Firebase
+        var config = {
+            apiKey: "AIzaSyC4NzV-q4dBn_IytInpXlbbhEPaHJU9ULk",
+            authDomain: "webavr-b9273.firebaseapp.com",
+            projectId: "webavr-b9273",
+            storageBucket: "webavr-b9273.appspot.com",
+            messagingSenderId: "240463881336",
+            appId: "1:240463881336:web:6642598bf894378f2ff98d",
+            measurementId: "G-6Q7ZQ22WJN"
+        };
+        firebase.initializeApp(config);
+
+       // Firebase Authentication State Change
+        firebase.auth().onAuthStateChanged(function(user) {
+            if (user) {
+                var email = user.email;
+                var username = email.split('@')[0];
+                var dbRef = firebase.database().ref(username + "/map/");
+
+                // Retrieve and Display Maps
+                dbRef.once('value').then(function(snapshot) {
+                    var imageContainer = document.getElementById('image-container');
+                    snapshot.forEach(function(childSnapshot) {
+                        var childData = childSnapshot.val();
+                        if (childData.URL) {
+                            // Create Bootstrap Column
+                            var colElement = document.createElement('div');
+                            colElement.className = 'col-md-4';
+
+                            // Create Card Element
+                            var cardElement = document.createElement('div');
+                            cardElement.className = 'card image-card';
+                            cardElement.innerHTML = `
+                                <img src="${childData.URL}" alt="${childSnapshot.key}" class="card-img-top">
+                                <div class="card-body">
+                                    <h5 class="card-title">${childSnapshot.key}</h5>
+                                    <button class="btn btn-primary edit-course-btn mt-2 mb-2" data-mapname="${childSnapshot.key}">編輯</button>
+                                    <button class="btn btn-danger mt-2 mb-2">刪除</button>
+                                    <button class="btn btn-success mt-2 mb-2">作答狀況</button>
+                                    <button class="btn btn-warning mt-2 mb-2">轉QRcode</button>
+                                </div>
+                            `;
+
+                            colElement.appendChild(cardElement);
+                            imageContainer.appendChild(colElement);
+                        }
+                    });
+
+                    // Add 'Edit' Button Event Listeners
+                    document.querySelectorAll('.edit-course-btn').forEach(function(btn) {
+                        btn.addEventListener('click', function() {
+                            var mapName = btn.getAttribute('data-mapname'); // Get the map name from the button
+                            window.location.href = "createMap.html?mapname=" + mapName; // Pass the map name as a query parameter
+                        });
+                    });
+
+                    // Add Image Card for New Maps
+                    var addImageCard = document.createElement("div");
+                    addImageCard.className = "card image-card";
+                    addImageCard.innerHTML = `
+                        <div class="card-body text-center">
+                            <h5 class="card-title">新增地圖</h5>
+                            <button id="addImageButton" class="btn btn-primary">新增</button>
+                        </div>
+                    `;
+                    imageContainer.appendChild(addImageCard);
+
+                    // Event Listener for 'Add New Image'
+                    document.getElementById("addImageButton").addEventListener("click", function() {
+                        window.location.href = "createMap.html";
+                    });
+                });
+            }
+        });
+    </script>
+</body>
+</html>
