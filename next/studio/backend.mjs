@@ -1,3 +1,4 @@
+import {sourceAccess} from './source-access.mjs';
 import {createImageGeneration} from './image-generation.mjs';
 import {createLearnerService} from './learner-service.mjs';
 import {readFile,writeFile,mkdir,rename,unlink,open} from 'node:fs/promises';
@@ -14,6 +15,7 @@ const parse=x=>{if(typeof x!=='string')return x;try{return JSON.parse(x);}catch{
 export async function createStudio(db,{privateRoot,sourceFile=null,tutorProvider,imageProvider}={}){
  await mkdir(privateRoot,{recursive:true,mode:0o700});const mediaRoot=new URL('media/',privateRoot);await mkdir(mediaRoot,{recursive:true,mode:0o700});
  await db.exec(`CREATE SCHEMA IF NOT EXISTS studio;
+ CREATE TABLE IF NOT EXISTS studio.source_grants(user_id uuid NOT NULL REFERENCES webavr.users(id),course_id uuid NOT NULL,evidence_ref text NOT NULL CHECK(length(trim(evidence_ref)) BETWEEN 3 AND 300),granted_at timestamptz NOT NULL DEFAULT now(),revoked_at timestamptz,PRIMARY KEY(user_id,course_id));
  CREATE TABLE IF NOT EXISTS studio.drafts(id uuid PRIMARY KEY, owner_id uuid NOT NULL, revision int NOT NULL DEFAULT 1, document jsonb NOT NULL, updated_at timestamptz NOT NULL DEFAULT now());
  CREATE TABLE IF NOT EXISTS studio.revisions(draft_id uuid NOT NULL,revision int NOT NULL,document jsonb NOT NULL,created_at timestamptz NOT NULL DEFAULT now(),PRIMARY KEY(draft_id,revision));
  CREATE TABLE IF NOT EXISTS studio.media(id uuid PRIMARY KEY,owner_id uuid NOT NULL,filename text NOT NULL,width int NOT NULL,height int NOT NULL,sha256 text NOT NULL,original_name text NOT NULL);
@@ -45,22 +47,23 @@ export async function createStudio(db,{privateRoot,sourceFile=null,tutorProvider
   }
   // Provenance is server-controlled, never changed by a browser form.
   d.sourceId=old.document.sourceId??null;d.source=(source.courses.find(x=>x?.id===d.sourceId)?.source)??old.document.source??null;d.sourceOwnerId=old.document.sourceOwnerId??null;d.id=id;
-  const mediaIds=new Set([d.coverAssetId,...d.maps.map(m=>m.assetId),...d.scenes.map(s=>s.assetId)].filter(Boolean));
-  for(const aid of mediaIds)check(source.assets[aid]||(user.roles.includes('admin')&&!!(await db.query('SELECT 1 FROM studio.source_media WHERE id=$1',[aid])).rows.length)||!!(await db.query('SELECT 1 FROM studio.media WHERE id=$1 AND owner_id=$2',[aid,user.id])).rows.length,403,'MEDIA_FORBIDDEN');
+  const mediaIds=new Set([d.coverAssetId,...d.maps.map(m=>m.assetId),...d.scenes.flatMap(s=>[s.assetId,...s.hotspots.flatMap(h=>h.assetIds??[])])].filter(Boolean));
+  const scope=await sourceAccess(db,source,user);
+  for(const aid of mediaIds)check((scope.hasAsset(aid)&&(!!source.assets[aid]||!!(await db.query('SELECT 1 FROM studio.source_media WHERE id=$1 UNION ALL SELECT 1 FROM studio.course_files WHERE id=$1',[aid])).rows.length))||!!(await db.query('SELECT 1 FROM studio.media WHERE id=$1 AND owner_id=$2',[aid,user.id])).rows.length,403,'MEDIA_FORBIDDEN');
   return db.transaction(async tx=>{const q=await tx.query('UPDATE studio.drafts SET document=$1,revision=revision+1,updated_at=now() WHERE id=$2 AND owner_id=$3 AND revision=$4 RETURNING revision,updated_at',[d,id,user.id,revision]);check(q.rows.length,409,'REVISION_CONFLICT');await tx.query('INSERT INTO studio.revisions(draft_id,revision,document) VALUES($1,$2,$3)',[id,q.rows[0].revision,d]);return {id,document:d,...q.rows[0]};});
  }
  async function newDraft(user,d){const id=uuid();d.id=id;validate(d);await db.transaction(async tx=>{await tx.query('INSERT INTO studio.drafts(id,owner_id,document) VALUES($1,$2,$3)',[id,user.id,d]);await tx.query('INSERT INTO studio.revisions(draft_id,revision,document) VALUES($1,1,$2)',[id,d]);});return {id,revision:1,document:d};}
  function cloneSource(c){const d=structuredClone(c);d.sourceId=c.id;d.sourceOwnerId=c.sourceOwnerId;d.state='draft';return d;}
  async function handle({user,method,pathname,body,url,headers={},uploadStream,signal}){
   if(pathname==='/api/studio/tutor-status'||pathname.startsWith('/api/studio/class-learning/')||pathname.startsWith('/api/learn/')||pathname==='/api/studio/teaching-classes'||/\/class-lessons$/.test(pathname))return learnerHandle({user,method,pathname,body,url,headers,uploadStream,signal});
-  if(!pathname.startsWith('/api/studio/'))return null;teacher(user);if(method==='POST')check(record(body));
+  if(!pathname.startsWith('/api/studio/'))return null;teacher(user);const scope=await sourceAccess(db,source,user);if(method==='POST')check(record(body));
   if(/^\/api\/studio\/courses\/[a-f0-9-]+\/image-generations(?:\/|$)/i.test(pathname))return imageGeneration.handle({user,method,pathname,body});
-  if(pathname==='/api/studio/courses'&&method==='GET'){const q=await db.query('SELECT id,document,revision,updated_at FROM studio.drafts WHERE owner_id=$1 ORDER BY updated_at DESC',[user.id]);const readyIds=new Set((await db.query('SELECT id FROM studio.media WHERE owner_id=$1',[user.id])).rows.map(r=>r.id));if(user.roles.includes('admin'))for(const r of (await db.query('SELECT id FROM studio.source_media')).rows)readyIds.add(r.id);return {items:q.rows.map(r=>({...summary(parse(r.document),r.id),coverReady:readyIds.has(parse(r.document)?.coverAssetId),revision:r.revision,updatedAt:r.updated_at})),canReadSources:user.roles.includes('admin')};}
+  if(pathname==='/api/studio/courses'&&method==='GET'){const q=await db.query('SELECT id,document,revision,updated_at FROM studio.drafts WHERE owner_id=$1 ORDER BY updated_at DESC',[user.id]);const readyIds=new Set((await db.query('SELECT id FROM studio.media WHERE owner_id=$1',[user.id])).rows.map(r=>r.id));if(scope.canRead)for(const r of (await db.query('SELECT id FROM studio.source_media')).rows)if(scope.hasAsset(r.id))readyIds.add(r.id);return {items:q.rows.map(r=>({...summary(parse(r.document),r.id),coverReady:readyIds.has(parse(r.document)?.coverAssetId),revision:r.revision,updatedAt:r.updated_at})),canReadSources:scope.canRead};}
   if(pathname==='/api/studio/courses'&&method==='POST'){check(Object.keys(body).every(k=>['title','description','category','grade','goals'].includes(k)));return newDraft(user,{title:body.title,description:body.description??'',category:body.category??'其他',grade:body.grade??'',goals:body.goals??'',coverAssetId:null,maps:[],scenes:[],tours:[],sourceId:null,state:'draft'});}
-  if(pathname==='/api/studio/sources'&&method==='GET'){admin(user);const restoredIds=new Set((await db.query('SELECT id FROM studio.source_media')).rows.map(x=>x.id));return {items:source.courses.filter(c=>record(c)&&courseId(c.id)).map(c=>{const view=summary(c);const ids=[...new Set([c.coverAssetId,...(Array.isArray(c.maps)?c.maps:[]).filter(record).map(m=>m.assetId),...(Array.isArray(c.scenes)?c.scenes:[]).filter(record).map(s=>s.assetId)].filter(v=>courseId(v)))];return {...view,ownerVerified:false,coverReady:restoredIds.has(c.coverAssetId),expectedImages:ids.length,readyImages:ids.filter(id=>restoredIds.has(id)).length};}),unlinked:{maps:source.unlinked.maps.filter(m=>record(m)&&courseId(m.id)).map(m=>({id:m.id,title:typeof m.title==='string'?m.title:'待檢查地圖',markers:Array.isArray(m.markers)?m.markers.length:0})),tours:source.unlinked.tours.filter(t=>record(t)&&courseId(t.id)).map(t=>({id:t.id,title:typeof t.title==='string'?t.title:'待檢查導覽',scenes:Array.isArray(t.scenes)?t.scenes.length:0}))},counts:source.counts,snapshotSha256:source.snapshotSha256};}
+  if(pathname==='/api/studio/sources'&&method==='GET'){check(scope.canRead,403,'FORBIDDEN');const restoredIds=new Set((await db.query('SELECT id FROM studio.source_media')).rows.map(x=>x.id));return {items:scope.courses.map(c=>{const view=summary(c);const ids=[...new Set([c.coverAssetId,...(Array.isArray(c.maps)?c.maps:[]).filter(record).map(m=>m.assetId),...(Array.isArray(c.scenes)?c.scenes:[]).filter(record).map(s=>s.assetId)].filter(v=>courseId(v)))];return {...view,ownerVerified:!scope.admin,coverReady:restoredIds.has(c.coverAssetId),expectedImages:ids.length,readyImages:ids.filter(id=>restoredIds.has(id)).length};}),unlinked:{maps:(scope.admin?source.unlinked.maps:[]).filter(m=>record(m)&&courseId(m.id)).map(m=>({id:m.id,title:typeof m.title==='string'?m.title:'待檢查地圖',markers:Array.isArray(m.markers)?m.markers.length:0})),tours:(scope.admin?source.unlinked.tours:[]).filter(t=>record(t)&&courseId(t.id)).map(t=>({id:t.id,title:typeof t.title==='string'?t.title:'待檢查導覽',scenes:Array.isArray(t.scenes)?t.scenes.length:0}))},counts:scope.admin?source.counts:{courses:scope.courses.length},snapshotSha256:source.snapshotSha256};}
   let m=pathname.match(/^\/api\/studio\/sources\/([a-f0-9-]+)$/i);
-  if(m&&method==='GET'){admin(user);const c=source.courses.find(x=>x?.id===m[1]);check(c,404,'NOT_FOUND');return {document:c,validation:inspectCourse(c)};}
-  if(m&&method==='POST'){admin(user);const c=source.courses.find(x=>x?.id===m[1]);check(c,404,'NOT_FOUND');check(body.action==='copy');return newDraft(user,cloneSource(c));}
+  if(m&&method==='GET'){check(scope.canRead,403,'FORBIDDEN');check(scope.hasCourse(m[1]),404,'NOT_FOUND');const c=source.courses.find(x=>x?.id===m[1]);check(c,404,'NOT_FOUND');return {document:c,validation:inspectCourse(c)};}
+  if(m&&method==='POST'){check(scope.canRead,403,'FORBIDDEN');check(scope.hasCourse(m[1]),404,'NOT_FOUND');const c=source.courses.find(x=>x?.id===m[1]);check(c,404,'NOT_FOUND');check(body.action==='copy');return newDraft(user,cloneSource(c));}
   m=pathname.match(/^\/api\/studio\/courses\/([a-f0-9-]+)$/i);
   if(m&&method==='GET'){const r=await draft(user,m[1]);return {id:r.id,revision:r.revision,document:r.document,updatedAt:r.updated_at,validation:inspectCourse(r.document)};}
   if(m&&method==='POST'){check(Number.isInteger(body.revision)&&body.revision>0&&body.document);return persist(user,m[1],body.revision,body.document);}
@@ -80,25 +83,26 @@ export async function createStudio(db,{privateRoot,sourceFile=null,tutorProvider
   m=pathname.match(/^\/api\/studio\/media\/([a-f0-9-]+)(?:\/(thumbnail|preview|panorama-1024|panorama-2048|panorama-4096|original))?$/i);
   if(m&&method==='GET'){
    check(idOK(m[1]));const row=(await db.query('SELECT * FROM studio.media WHERE id=$1 AND owner_id=$2',[m[1],user.id])).rows[0];
-   const restored=!row&&user.roles.includes('admin')?(await db.query('SELECT * FROM studio.source_media WHERE id=$1',[m[1]])).rows[0]:null;check(row||restored,404,'MEDIA_MISSING');
+   const restored=!row&&scope.hasAsset(m[1])?(await db.query('SELECT * FROM studio.source_media WHERE id=$1',[m[1]])).rows[0]:null;check(row||restored,404,'MEDIA_MISSING');
    if(m[2]==='original'){check(row,404,'MEDIA_MISSING');const original=(await db.query('SELECT * FROM studio.media_originals WHERE media_id=$1',[m[1]])).rows[0];check(original,404,'MEDIA_MISSING');return fileResponse(new URL('media-originals/'+original.filename,privateRoot),original.mime,{range:headers.range,downloadName:row.original_name});}
    let path=row?new URL(row.filename,mediaRoot):new URL('source-media/ready/'+restored.filename,privateRoot);
    if(m[2])path=await mediaService.variant(m[1],path,m[2]);
    return fileResponse(path,'image/jpeg',{range:headers.range});
   }
   m=pathname.match(/^\/api\/studio\/activities\/([a-f0-9-]+)\/media-link$/i);
-  if(m&&method==='GET'){admin(user);check(idOK(m[1]));const h=[...source.courses,...source.unlinked.tours].filter(record).flatMap(c=>Array.isArray(c.scenes)?c.scenes:[]).filter(record).flatMap(s=>Array.isArray(s.hotspots)?s.hotspots:[]).filter(record).find(h=>h.id===m[1]&&h.kind==='video');return {url:h?.legacy?.externalVideo??null};}
+  if(m&&method==='GET'){check(scope.canRead,403,'FORBIDDEN');check(scope.admin||scope.activities.has(m[1]),404,'NOT_FOUND');check(idOK(m[1]));const h=[...source.courses,...source.unlinked.tours].filter(record).flatMap(c=>Array.isArray(c.scenes)?c.scenes:[]).filter(record).flatMap(s=>Array.isArray(s.hotspots)?s.hotspots:[]).filter(record).find(h=>h.id===m[1]&&h.kind==='video');return {url:h?.legacy?.externalVideo??null};}
   m=pathname.match(/^\/api\/studio\/packages\/([a-f0-9-]+)$/i);
-  if(m&&method==='GET'){admin(user);check(idOK(m[1]));const rows=(await db.query('SELECT asset_id AS id,label,kind FROM studio.package_entries WHERE package_id=$1 ORDER BY label,asset_id',[m[1]])).rows;check(rows.length,404,'NOT_FOUND');return {items:rows};}
+  if(m&&method==='GET'){check(scope.canRead,403,'FORBIDDEN');check(scope.hasAsset(m[1]),404,'NOT_FOUND');check(idOK(m[1]));const rows=(await db.query('SELECT asset_id AS id,label,kind FROM studio.package_entries WHERE package_id=$1 ORDER BY label,asset_id',[m[1]])).rows;check(rows.length,404,'NOT_FOUND');return {items:rows};}
   m=pathname.match(/^\/api\/studio\/files\/([a-f0-9-]+)$/i);
   if(m&&method==='GET'){
-   admin(user);check(idOK(m[1]));const file=(await db.query('SELECT * FROM studio.course_files WHERE id=$1',[m[1]])).rows[0];check(file,404,'MEDIA_MISSING');   return fileResponse(new URL('source-media/originals/'+file.filename,privateRoot),file.mime,{range:headers.range,downloadName:url.searchParams.has('download')||!['audio','video'].includes(file.kind)?file.label:undefined});
+   check(scope.canRead,403,'FORBIDDEN');check(scope.hasAsset(m[1]),404,'NOT_FOUND');check(idOK(m[1]));const file=(await db.query('SELECT * FROM studio.course_files WHERE id=$1',[m[1]])).rows[0];check(file,404,'MEDIA_MISSING');   return fileResponse(new URL('source-media/originals/'+file.filename,privateRoot),file.mime,{range:headers.range,downloadName:url.searchParams.has('download')||!['audio','video'].includes(file.kind)?file.label:undefined});
   }
   if(pathname==='/api/studio/media-status'&&method==='POST'){
    check(Array.isArray(body.ids)&&body.ids.length<=1000&&body.ids.every(idOK));const rows=(await db.query('SELECT id,width,height FROM studio.media WHERE owner_id=$1 AND id=ANY($2::uuid[])',[user.id,body.ids])).rows;
-   const restored=user.roles.includes('admin')?(await db.query('SELECT id,width,height FROM studio.source_media WHERE id=ANY($1::uuid[])',[body.ids])).rows:[];
-   const files=user.roles.includes('admin')?(await db.query('SELECT id,mime,kind,label FROM studio.course_files WHERE id=ANY($1::uuid[])',[body.ids])).rows:[];
-   const issues=user.roles.includes('admin')?(await db.query('SELECT id,code FROM studio.source_media_issues WHERE id=ANY($1::uuid[])',[body.ids])).rows:[];const issueMap=new Map(issues.map(x=>[x.id,x.code]));const indexed=new Map([...restored,...rows].map(x=>[x.id,x]));const fileMap=new Map(files.map(x=>[x.id,x]));
+   const allowed=body.ids.filter(id=>scope.hasAsset(id));
+   const restored=(await db.query('SELECT id,width,height FROM studio.source_media WHERE id=ANY($1::uuid[])',[allowed])).rows;
+   const files=(await db.query('SELECT id,mime,kind,label FROM studio.course_files WHERE id=ANY($1::uuid[])',[allowed])).rows;
+   const issues=(await db.query('SELECT id,code FROM studio.source_media_issues WHERE id=ANY($1::uuid[])',[allowed])).rows;const issueMap=new Map(issues.map(x=>[x.id,x.code]));const indexed=new Map([...restored,...rows].map(x=>[x.id,x]));const fileMap=new Map(files.map(x=>[x.id,x]));
    return {items:body.ids.map(id=>{const f=fileMap.get(id);return {id,...f,state:indexed.has(id)?'ready':f?f.kind==='archive'?'package_ready':['audio','video'].includes(f.kind)?'media_ready':'attachment_ready':issueMap.get(id)??'missing',...indexed.get(id)};})};
   }
   fail(404,'NOT_FOUND');

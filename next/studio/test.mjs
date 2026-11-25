@@ -67,5 +67,24 @@ try{
  ok((await call(teacher,'/api/studio/media/'+aid)).binary?.length>0,'uploaded media survives restart');
  ok((await call(admin,'/api/studio/sources')).body.items.length===73,'original catalog survives restart without reimport');
  const compat=(await call(teacher,'/api/studio/courses',{title:'升級保留未儲存內容'})).body;const beforeUpgrade=structuredClone(d);beforeUpgrade.id=compat.id;beforeUpgrade.scenes[0].projection='unknown';await call(teacher,'/api/studio/courses/'+compat.id,{revision:1,document:beforeUpgrade});await enable360Scenes(db);beforeUpgrade.scenes[0].hotspots[0].content='保留原分頁未儲存的內容';const merged=await call(teacher,'/api/studio/courses/'+compat.id,{revision:2,document:beforeUpgrade});ok(merged.status===200&&merged.body.revision===4&&merged.body.document.scenes[0].projection==='equirectangular'&&merged.body.document.scenes[0].hotspots[0].content==='保留原分頁未儲存的內容','old editor can save unsaved work across projection-only upgrade');ok((await call(teacher,'/api/studio/courses/'+compat.id,{revision:2,document:beforeUpgrade})).status===409,'projection compatibility does not bypass later edit conflicts');
+ const teacherId=(await db.query("SELECT id FROM webavr.users WHERE email='teachera@example.invalid'")).rows[0].id;
+ await db.query('INSERT INTO studio.source_grants(user_id,course_id,evidence_ref) VALUES($1,$2,$3)',[teacherId,sourceDoc.id,'synthetic confirmed author']);
+ const granted=await call(teacher,'/api/studio/sources');ok(granted.body.items.length===1&&granted.body.items[0].id===sourceDoc.id&&granted.body.items[0].ownerVerified&&granted.body.unlinked.maps.length===0,'teacher catalog contains only explicitly approved source');
+ ok((await call(other,'/api/studio/sources')).status===403,'source grant does not authorize another teacher');
+ ok((await call(teacher,'/api/studio/media/'+restoredId+'/thumbnail')).status===200,'approved teacher can load original source thumbnail');
+ const editable=await call(teacher,'/api/studio/sources/'+sourceDoc.id,{action:'copy'});ok(editable.status===200&&editable.body.document.sourceOwnerId===sourceDoc.sourceOwnerId,'teacher copy retains original author provenance');
+ ok((await call(teacher,'/api/studio/courses/'+editable.body.id,{revision:1,document:editable.body.document})).status===200,'approved teacher can save source-based draft');
+ const foreign=teachingSources.courses.find(c=>c.id!==sourceDoc.id&&c.coverAssetId!==restoredId);
+ ok((await call(teacher,'/api/studio/sources/'+foreign.id)).status===404&&(await call(teacher,'/api/studio/sources/'+foreign.id,{action:'copy'})).status===404,'unapproved source cannot be read or copied');
+ const forged=structuredClone(editable.body.document);forged.coverAssetId=foreign.coverAssetId;
+ ok((await call(teacher,'/api/studio/courses/'+editable.body.id,{revision:2,document:forged})).status===403,'forged source asset reference cannot be saved');
+ const soundCourse=teachingSources.courses.find(c=>c.scenes.some(s=>s.hotspots.some(h=>h.assetIds?.length)));
+ const soundId=soundCourse.scenes.flatMap(s=>s.hotspots).flatMap(h=>h.assetIds??[])[0];
+ await db.query('INSERT INTO studio.source_grants(user_id,course_id,evidence_ref) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',[teacherId,soundCourse.id,'synthetic referenced package']);
+ await db.query('INSERT INTO studio.package_entries VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING',[soundId,fileId,'sample.mp3','audio']);
+ ok((await call(teacher,'/api/studio/files/'+fileId)).status===200,'referenced package child is accessible to approved teacher');
+ await db.query('UPDATE studio.source_grants SET revoked_at=now() WHERE user_id=$1',[teacherId]);
+ ok((await call(teacher,'/api/studio/media/'+restoredId)).status===404&&(await call(teacher,'/api/studio/files/'+fileId)).status===403,'revocation immediately denies image and package child without restart');
+ ok((await call(admin,'/api/studio/sources/'+sourceDoc.id)).body.document.title===sourceDoc.title,'grant and editing never alter source document');
  console.log(JSON.stringify({passed:count}));
 }finally{await new Promise(r=>app.server.close(r));await db.close();await rm(dir,{recursive:true,force:true});}
