@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Fetch a reviewed GitHub commit and update ONLY the isolated acceptance app."""
-import argparse,fcntl,io,json,os,re,shutil,socket,subprocess,tarfile,time,urllib.request
+import argparse,fcntl,hashlib,io,json,os,re,shutil,socket,subprocess,tarfile,time,urllib.request
 from pathlib import Path
 REPO='https://github.com/yongliancai/webAVR.git'
 BRANCH='next-preview'
@@ -17,6 +17,25 @@ def parse_pm2_list(output):
         except json.JSONDecodeError:continue
         if isinstance(value,list) and all(isinstance(app,dict) and 'pm2_env' in app for app in value):return value
     raise RuntimeError('PM2 did not return a valid application list')
+
+def replace_application(config,env):
+    # PM2 restart keeps the previous script/cwd for an existing name.
+    # Replace only this isolated app, never other apps or the legacy PM2 home.
+    apps=parse_pm2_list(run(['pm2','jlist'],env=env))
+    if any(app.get('name')==NAME for app in apps):run(['pm2','delete',NAME],env=env)
+    run(['pm2','start',config,'--update-env'],env=env)
+
+def assert_running_release(apps,app):
+    target=next((item for item in apps if item.get('name')==NAME),None)
+    state=target.get('pm2_env',{}) if target else {}
+    if state.get('status')!='online' or state.get('pm_cwd')!=str(app) or state.get('pm_exec_path')!=str(app/'studio/serve-acceptance-test.mjs'):
+        raise RuntimeError('PM2 is not running the requested release directory')
+
+def verify_frontend(app):
+    with urllib.request.urlopen('http://localhost:'+str(PORT)+'/studio.js',timeout=10) as response:
+        served=hashlib.sha256(response.read()).hexdigest()
+    if served!=hashlib.sha256((app/'public/studio.js').read_bytes()).hexdigest():
+        raise RuntimeError('Served frontend differs from requested release')
 
 def safe_members(tar,destination):
     members=tar.getmembers()
@@ -113,8 +132,10 @@ def deploy(root,args):
             backup=backups/('data-'+stamp);shutil.copytree(data,backup)
         config={'apps':[{'name':NAME,'script':str(app/'studio/serve-acceptance-test.mjs'),'cwd':str(app),'interpreter':str(node),'exec_mode':'fork','instances':1,'kill_timeout':10000,'min_uptime':10000,'max_restarts':3,'restart_delay':2000,'out_file':str(shared/'out.log'),'error_file':str(shared/'error.log'),'env':{'WEBAVR_ACCEPTANCE_ROOT':str(data),'WEBAVR_ACCEPTANCE_PORT':str(PORT)}}]}
         old_config.write_text(json.dumps(config,indent=2))
-        run(['pm2','startOrRestart',old_config,'--update-env'],env=env)
+        replace_application(old_config,env)
         wait_ready()
+        assert_running_release(parse_pm2_list(run(['pm2','jlist'],env=env)),app)
+        verify_frontend(app)
         # Verify we started this service rather than accepting an unrelated 200.
         with urllib.request.urlopen('http://localhost:'+str(PORT)+'/test/evidence',timeout=5) as response:
             if json.load(response).get('syntheticOnly') is not True:raise RuntimeError('Acceptance identity mismatch')
@@ -132,8 +153,10 @@ def deploy(root,args):
             shutil.copytree(backup,data)
         if old_config_text and previous:
             old_config.write_text(old_config_text)
-            run(['pm2','startOrRestart',old_config,'--update-env'],env=env)
+            replace_application(old_config,env)
             wait_ready()
+            assert_running_release(parse_pm2_list(run(['pm2','jlist'],env=env)),previous/'next')
+            verify_frontend(previous/'next')
             if current.is_symlink():current.unlink()
             current.symlink_to(previous)
             run(['pm2','save'],env=env)
