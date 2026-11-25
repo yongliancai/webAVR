@@ -4,6 +4,7 @@ import {hash,verify,Algorithm} from '@node-rs/argon2';
 import {setTimeout as delay} from 'node:timers/promises';
 import {readFile} from 'node:fs/promises';
 import {pipeline} from 'node:stream/promises';
+import {createGoogleLogin} from './google-login.mjs';
 
 const digest=s=>createHash('sha256').update(s).digest('hex');
 const random=()=>randomBytes(32).toString('base64url');
@@ -43,11 +44,12 @@ export class RateLimiter{
 
 const tutorAudioPath=path=>/^\/api\/learn\/courses\/[a-f0-9-]+\/assistant\/transcribe$/i.test(path);
 const binaryPath=path=>/^\/api\/studio\/uploads\/[a-f0-9-]+\/content$/i.test(path)||tutorAudioPath(path);
-export async function createApp(db,{origin='https://webavr.example',secureCookies=true,mailer,authLimit=10,requestLimit=5,writeLimit=120,limiter=new RateLimiter(),diagnostics=()=>{},webRoot=null,studio=null}={}){
+export async function createApp(db,{origin='https://webavr.example',secureCookies=true,mailer,authLimit=10,requestLimit=5,writeLimit=120,limiter=new RateLimiter(),diagnostics=()=>{},webRoot=null,studio=null,google=null,demoAccounts=false}={}){
  const site=new URL(origin);
  requireThat(site.origin===origin&&!site.username&&!site.password,500,'INVALID_ORIGIN_CONFIG');
  requireThat(secureCookies?site.protocol==='https:':site.protocol==='http:'&&['127.0.0.1','localhost','[::1]'].includes(site.hostname),500,'INVALID_COOKIE_CONFIG');
  requireThat(typeof mailer==='function',500,'MAILER_REQUIRED');
+ const googleLogin=await createGoogleLogin(db,google,{origin,secureCookies});
  const cookieName=secureCookies?'__Host-webavr_session':'webavr_dev_session';
  const webFiles=new Map();
  if(webRoot){
@@ -107,7 +109,8 @@ export async function createApp(db,{origin='https://webavr.example',secureCookie
    requireThat(typeof path==='string'&&path.startsWith('/')&&!path.startsWith('//')&&path.length<=2048,400,'INVALID_PATH');
    const url=new URL(path,origin);requireThat(url.origin===origin,400,'INVALID_PATH');
    requireThat(headers.origin===undefined||headers.origin===origin,403,'ORIGIN_DENIED');
-   requireThat(headers['sec-fetch-site']!=='cross-site',403,'ORIGIN_DENIED');
+   const googleCallback=googleLogin&&method==='GET'&&url.pathname==='/api/auth/google/callback';
+   requireThat(headers['sec-fetch-site']!=='cross-site'||googleCallback,403,'ORIGIN_DENIED');
    requireThat(['GET','POST'].includes(method),405,'METHOD_NOT_ALLOWED');
    if(method==='POST'){
     requireThat(headers.origin===origin,403,'ORIGIN_DENIED');
@@ -118,6 +121,13 @@ export async function createApp(db,{origin='https://webavr.example',secureCookie
     limiter.check(['write:'+ip],writeLimit);
    }
    const pathname=url.pathname;
+   if(method==='GET'&&pathname==='/api/auth/options')return {status:200,headers:responseHeaders,body:{google:!!googleLogin,demoAccounts:demoAccounts===true}};
+   if(method==='GET'&&googleLogin&&pathname==='/api/auth/google/start'){
+    limiter.check(['google-start:'+ip],authLimit);const r=await googleLogin.start();return {...r,headers:{...responseHeaders,...r.headers}};
+   }
+   if(googleCallback){
+    const r=await googleLogin.callback(url,headers);if(r.sessionRaw)r.headers['set-cookie']=[r.headers['set-cookie'],cookie(r.sessionRaw)];delete r.sessionRaw;return {...r,headers:{...responseHeaders,...r.headers}};
+   }
    if(method==='GET'&&pathname==='/api/health')return {status:200,headers:responseHeaders,body:{status:'local-prototype'}};
    if(method==='POST'&&['/api/auth/activation-request','/api/auth/password-reset-request'].includes(pathname)){
     const started=performance.now();

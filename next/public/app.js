@@ -67,9 +67,16 @@ function renderAuth(mode='login',recovery=null){
   else{await api('/api/auth/'+(mode==='activate'?'activation-request':'password-reset-request'),{method:'POST',body:{email:address.input.value}});form.replaceChildren(append(el('div','success'),el('strong','','已收到申請'),p('若帳號符合條件，會收到設定連結。若仍無法啟用，請聯絡管理員確認身分。')));}
  });
  const links=el('div','links');if(login)append(links,btn('首次使用？啟用帳號',()=>renderAuth('activate'),'button ghost'),btn('忘記密碼',()=>renderAuth('reset'),'button ghost'));else links.append(btn('← 回到登入',()=>renderAuth(),'button ghost'));main.append(links);
- if(login){const help=el('details','demo-help');append(help,el('summary','','使用測試帳號體驗'),p('這些帳號只存在於此本機體驗版，不代表真實學生或老師。'));
+ if(login){const authVersion=version,notice=new URLSearchParams(location.search).get('login');
+  if(notice==='google_review')main.prepend(p('Google 身分驗證已完成；此帳號仍需核准連結，尚未開放教材與歷史資料。','sub'));
+  if(notice==='google_failed')main.prepend(p('Google 登入未完成，請重新點選登入；也可使用 email 登入。','sub'));
+  const help=el('details','demo-help');append(help,el('summary','','使用測試帳號體驗'),p('這些帳號只存在於此本機體驗版，不代表真實學生或老師。'));
   const switches=el('div','switches');for(const [name,title] of [['students','學生'],['teachera','老師'],['admin','管理員']])switches.append(btn(title,()=>{address.input.value=name+'@example.invalid';pass.input.value='Synthetic-long-password-123!';address.input.focus();},'button secondary small'));
-  append(help,switches,p('選擇身分後按「登入工作室」。管理員敏感查詢須填寫用途。'));main.append(help);}
+  append(help,switches,p('選擇身分後按「登入工作室」。管理員敏感查詢須填寫用途。'));
+  api('/api/auth/options').then(options=>{if(version!==authVersion||!main.isConnected)return;
+   if(options.google){const link=el('a','button primary full','使用 Google 帳號登入');link.href='/api/auth/google/start';main.insertBefore(link,form);main.insertBefore(p('或使用 email 與密碼','sub'),form);}
+   if(options.demoAccounts===true)main.append(help);
+  }).catch(()=>{});}
 }
 
 function navigate(view){state.view=view;version++;history.replaceState(null,'','/#'+view);renderShell();}

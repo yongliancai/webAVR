@@ -19,7 +19,7 @@ const mailer=async mail=>{
  const file=new URL('mailbox.jsonl',folder);await appendFile(file,JSON.stringify(mail)+'\n',{mode:0o600});
 };
 const origin='http://127.0.0.1:'+port;
-const {server}=await createApp(db,{origin,secureCookies:false,mailer,studio,webRoot:new URL('./public/',import.meta.url)});
+const {server}=await createApp(db,{origin,secureCookies:false,mailer,studio,demoAccounts:true,webRoot:new URL('./public/',import.meta.url)});
 await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,'127.0.0.1',resolve);});
 console.log(JSON.stringify({mode:'local-authoring-with-private-source-catalog',url:origin+'/',mailboxDirectory:folder.pathname,notice:'Synthetic login accounts; real legacy teaching catalog is admin-only. Drafts persist locally. No SMTP or production changes.'}));
 const close=()=>server.close(async()=>{await db.close();process.exit(0);});

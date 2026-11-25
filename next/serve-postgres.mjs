@@ -20,7 +20,7 @@ if(!ready)throw Error('SCHEMA_INITIALIZATION_REQUIRED');
 const delivery=await createMailDelivery(db,config.mail);
 const studio=await createStudio(db,{privateRoot,sourceFile:config.sourceFile?pathToFileURL(resolve(config.sourceFile)):null,tutorProvider:{configured:false},imageProvider:{configured:false,model:'disabled-for-acceptance'}});
 const origin='http://localhost:'+port;
-const app=await createApp(db,{origin,secureCookies:false,mailer:delivery.enqueue,studio,webRoot:new URL('./public/',import.meta.url)});
+const app=await createApp(db,{origin,secureCookies:false,mailer:delivery.enqueue,studio,google:config.google??null,webRoot:new URL('./public/',import.meta.url)});
 await new Promise((ok,no)=>{app.server.once('error',no);app.server.listen(port,'127.0.0.1',ok);});
 const timer=setInterval(()=>delivery.tick().catch(()=>{}),2000);timer.unref();
 console.log(JSON.stringify({url:origin,engine:'native-postgresql',testLoginShortcuts:false,mailMode:config.mail.mode,productionCutover:false}));
