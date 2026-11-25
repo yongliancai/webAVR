@@ -13,7 +13,7 @@
     "sharp": "0.35.5"
   },
   "name": "webavr-learning-studio",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "private": true,
   "type": "module",
   "scripts": {

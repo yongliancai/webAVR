@@ -20,9 +20,14 @@ try{
  await db.query("INSERT INTO auth_private.google_bindings VALUES('disabled-sub',$1,'synthetic-approved-map',now())",[ids.disabled]);assert.equal((await run({sub:'disabled-sub',email:'disabled@example.invalid',email_verified:true})).body.status,'review_required');pass();
  await db.query("UPDATE webavr.users SET state='active',email_verified_at=now() WHERE id=$1",[ids.unresolved]);
  await db.query("INSERT INTO auth_private.google_bindings VALUES('unresolved-sub',$1,'synthetic-not-enough',now())",[ids.unresolved]);assert.equal((await run({sub:'unresolved-sub',email:'unresolved@example.invalid',email_verified:true})).body.status,'review_required');pass();
- const app=await createApp(db,{origin,secureCookies:false,mailer:async()=>{},google:config});const options=await app.dispatch({path:'/api/auth/options'});assert.deepEqual(options.body,{google:true,demoAccounts:false});pass();
+ const delivered=[];const app=await createApp(db,{origin,secureCookies:false,mailer:async m=>delivered.push(m),google:config});const options=await app.dispatch({path:'/api/auth/options'});assert.deepEqual(options.body,{google:true,demoAccounts:false});pass();
  const rejected=await app.dispatch({path:'/api/auth/google/callback?state=bad&code=bad',headers:{'sec-fetch-site':'cross-site'}});assert.equal(rejected.status,303);assert(rejected.headers.location.includes('google_failed'));pass();
  assert.equal((await app.dispatch({path:'/api/auth/session',headers:{'sec-fetch-site':'cross-site'}})).status,403);pass();
  const disabled=await createApp(db,{origin,secureCookies:false,mailer:async()=>{}});assert.equal((await disabled.dispatch({path:'/api/auth/options'})).body.google,false);pass();
+ await db.query("UPDATE webavr.users SET state='active',email_verified_at=now() WHERE id=$1",[ids.pending]);await db.query("INSERT INTO auth_private.google_bindings VALUES('backup-sub',$1,'synthetic-approved',now())",[ids.pending]);
+ const post=(path,body)=>app.dispatch({method:'POST',path,headers:{origin,'content-type':'application/json'},body});
+ await post('/api/auth/password-reset-request',{email:'pending@example.invalid'});assert.equal(delivered.length,1);pass();
+ const token=new URLSearchParams(new URL(delivered[0].url).hash.slice(1)).get('token');const backup='Only-synthetic-email-backup-123!';assert.equal((await post('/api/auth/password-reset-confirm',{token,password:backup})).status,200);assert.equal((await post('/api/auth/login',{email:'pending@example.invalid',password:backup})).status,200);pass();
+ await post('/api/auth/password-reset-request',{email:'unresolved@example.invalid'});assert.equal(delivered.length,1);pass();
  console.log(JSON.stringify({passed:checks,scope:'synthetic OAuth security tests; no live Google login'}));
 }finally{await db.close();}

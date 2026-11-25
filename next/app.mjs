@@ -136,7 +136,9 @@ export async function createApp(db,{origin='https://webavr.example',secureCookie
     const raw=random();let mail;
     await db.transaction(async tx=>{
      const u=await first(tx,'SELECT * FROM webavr.users WHERE lower(email)=$1 FOR UPDATE',[address]);
-     const eligible=activate?await activationReady(tx,u):u?.state==='active'&&!!(await first(tx,'SELECT 1 FROM auth_private.credentials WHERE user_id=$1',[u.id]));
+     const localCredential=u?.state==='active'&&!!(await first(tx,'SELECT 1 FROM auth_private.credentials WHERE user_id=$1',[u.id]));
+     const approvedGoogle=u?.state==='active'&&googleLogin&&await identityReady(tx,u.id)&&!!(await first(tx,'SELECT 1 FROM auth_private.google_bindings WHERE user_id=$1',[u.id]));
+     const eligible=activate?await activationReady(tx,u):u?.state==='active'&&(localCredential||approvedGoogle);
      if(eligible){
       await tx.query('UPDATE auth_private.tokens SET revoked_at=now() WHERE user_id=$1 AND purpose=$2 AND consumed_at IS NULL AND revoked_at IS NULL',[u.id,purpose]);
       const id=randomUUID();await tx.query(`INSERT INTO auth_private.tokens(id,user_id,purpose,token_hash,expires_at) VALUES($1,$2,$3,$4,now()+interval '30 minutes')`,[id,u.id,purpose,digest(raw)]);
