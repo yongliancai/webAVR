@@ -1,0 +1,36 @@
+{
+  "dependencies": {
+    "@electric-sql/pglite": "0.5.14",
+    "@node-rs/argon2": "2.0.2",
+    "esbuild": "^0.25.12",
+    "opencc-js": "1.4.2",
+    "pannellum": "2.5.7",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "sharp": "0.35.5"
+  },
+  "name": "webavr-learning-studio",
+  "version": "0.7.2",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node test.mjs && node test-ui-api.mjs && node test-session-recovery.mjs && node test-editor-reliability.mjs && node test-course-validation.mjs && node test-media-performance.mjs && node test-learner.mjs && node test-learning.mjs && node studio/test-learning-queue.mjs && node studio/test-class-recap.mjs && node studio/test-tutor.mjs && node studio/test-tutor-speech.mjs && node studio/test-image-generation.mjs && node studio/test-share-requests.mjs && node studio/test-acceptance-config.mjs",
+    "demo": "node demo.mjs",
+    "smoke": "node smoke-demo.mjs",
+    "build": "node studio/build.mjs",
+    "test:studio": "node studio/test.mjs",
+    "test:session": "node test-session-recovery.mjs",
+    "test:editor": "node test-editor-reliability.mjs",
+    "test:validation": "node test-course-validation.mjs",
+    "test:media": "node test-media-performance.mjs",
+    "test:canvas": "node studio/test-canvas-geometry.mjs",
+    "test:learner": "node test-learner.mjs",
+    "test:learning": "node test-learning.mjs && node studio/test-learning-queue.mjs",
+    "test:tutor": "node studio/test-tutor.mjs && node studio/test-tutor-speech.mjs",
+    "test:images": "node studio/test-image-generation.mjs",
+    "test:recap": "node studio/test-class-recap.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

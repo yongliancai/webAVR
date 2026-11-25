@@ -1,0 +1,7 @@
+{
+  "version": "0.7.2",
+  "channel": "acceptance-only",
+  "branch": "next-preview",
+  "minimumNodeMajor": 22,
+  "productionCutover": false
+}

@@ -1,0 +1,43 @@
+# Dependencies and local state
+node_modules/
+.DS_Store
+.cache/
+coverage/
+local-service.*
+
+# Private configuration and credentials
+.env
+.env.*
+!.env.example
+/env
+.npmrc
+.ssh/
+*.pem
+*.key
+*.p12
+*.pfx
+*firebase-adminsdk*.json
+*service-account*.json
+
+# Teaching data, accounts, messages, uploads, backups
+private-studio/
+private-demo/
+source-media/
+source-catalog.json
+backups/
+evidence/
+*.tar.gz
+*.zip
+*.sqlite
+*.sqlite3
+
+# Local verification results can contain original teaching content
+*results.json
+*.log
+*.jsonl
+
+# Rebuilt from source on each version
+public/studio.js
+public/learn.js
+public/class-learning.js
+__pycache__/
