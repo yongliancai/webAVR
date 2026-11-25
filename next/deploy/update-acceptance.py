@@ -10,6 +10,14 @@ NAME='webavr-next-acceptance'
 def run(args,env=None):
     return subprocess.run([str(a) for a in args],check=True,capture_output=True,text=True,env=env).stdout
 
+def parse_pm2_list(output):
+    # First use may print a daemon startup banner before the JSON payload.
+    for line in reversed(output.splitlines()):
+        try:value=json.loads(line)
+        except json.JSONDecodeError:continue
+        if isinstance(value,list) and all(isinstance(app,dict) and 'pm2_env' in app for app in value):return value
+    raise RuntimeError('PM2 did not return a valid application list')
+
 def safe_members(tar,destination):
     members=tar.getmembers()
     for member in members:
@@ -90,7 +98,7 @@ def deploy(root,args):
     backups=root/'backups';backups.mkdir(mode=0o700,exist_ok=True)
     stamp=time.strftime('%Y%m%dT%H%M%SZ',time.gmtime())+'-'+str(time.time_ns())
     # Query only this deployment's PM2 namespace; never touch legacy PM2.
-    apps=json.loads(run(['pm2','jlist'],env=env))
+    apps=parse_pm2_list(run(['pm2','jlist'],env=env))
     exists=any(a.get('name')==NAME for a in apps)
     if not exists:
         with socket.socket() as sock:
