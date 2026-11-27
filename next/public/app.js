@@ -57,14 +57,14 @@ function renderAuth(mode='login',recovery=null){
   append(form,pass.wrapper,confirm.wrapper,submit('設定密碼'));
   onSubmit(form,async()=>{if(pass.input.value!==confirm.input.value){formError(form,'兩次輸入的密碼不相同。');return;}await api('/api/auth/'+(activating?'activation-confirm':'password-reset-confirm'),{method:'POST',body:{token:recovery.token,password:pass.input.value}});recovery.token='';form.reset();main.replaceChildren(el('h2','','密碼已更新'),p('請使用剛設定的密碼重新登入。','sub'),btn('前往登入',()=>{history.replaceState(null,'','/');renderAuth();},'button full'));});main.append(form);return;
  }
- const login=mode==='login';main.append(el('h2','',login?'歡迎回來':mode==='activate'?'啟用你的帳號':'忘記密碼了嗎？'));
- main.append(p(login?'登入後，繼續你的學習與教學旅程。':mode==='activate'?'帳號經身分核准後，才能收到設定密碼的連結。':'輸入帳號信箱，我們會提供下一步的指引。','sub'));
+ const login=mode==='login';main.append(el('h2','',login?'歡迎回來':mode==='activate'?'啟用你的帳號':'設定或重設密碼'));
+ main.append(p(login?'登入後，繼續你的學習與教學旅程。':mode==='activate'?'帳號經身分核准後，才能收到設定密碼的連結。':'輸入已核准帳號的信箱。Google 帳號也可在這裡設定 email 備用登入密碼。','sub'));
  const form=el('form');const address=field('帳號信箱',{type:'email',autocomplete:'username',placeholder:'name@example.com'});form.append(address.wrapper);
  let pass;if(login){pass=field('密碼',{type:'password',autocomplete:'current-password'});form.append(pass.wrapper);}
  const action=submit(login?'登入工作室':'申請設定連結');action.classList.add('full');form.append(action);main.append(form);
  onSubmit(form,async()=>{
   if(login){await api('/api/auth/login',{method:'POST',body:{email:address.input.value,password:pass.input.value}});pass.input.value='';const session=await api('/api/auth/session');state.user=session.user;state.csrf=session.csrfToken;authEpoch++;if(state.user.roles.includes('student')&&!isTeacher()&&!isAdmin()){location.assign('/learn');return;}navigate(isAdmin()?'users':'home');}
-  else{await api('/api/auth/'+(mode==='activate'?'activation-request':'password-reset-request'),{method:'POST',body:{email:address.input.value}});form.replaceChildren(append(el('div','success'),el('strong','','已收到申請'),p('若帳號符合條件，會收到設定連結。若仍無法啟用，請聯絡管理員確認身分。')));}
+  else{await api('/api/auth/'+(mode==='activate'?'activation-request':'password-reset-request'),{method:'POST',body:{email:address.input.value}});form.replaceChildren(append(el('div','success'),el('strong','','已收到申請'),p('若帳號符合條件，會收到30分鐘內有效的設定連結，請同時檢查垃圾郵件。若未收到，請稍後再試或聯絡管理員確認身分。')));}
  });
  const links=el('div','links');if(login)append(links,btn('首次使用？啟用帳號',()=>renderAuth('activate'),'button ghost'),btn('忘記密碼',()=>renderAuth('reset'),'button ghost'));else links.append(btn('← 回到登入',()=>renderAuth(),'button ghost'));main.append(links);
  if(login){const authVersion=version,notice=new URLSearchParams(location.search).get('login');
@@ -75,6 +75,7 @@ function renderAuth(mode='login',recovery=null){
   append(help,switches,p('選擇身分後按「登入工作室」。管理員敏感查詢須填寫用途。'));
   api('/api/auth/options').then(options=>{if(version!==authVersion||!main.isConnected)return;
    if(options.google){const link=el('a','button primary full','使用 Google 帳號登入');link.href='/api/auth/google/start';main.insertBefore(link,form);main.insertBefore(p('或使用 email 與密碼','sub'),form);}
+   if(options.google&&options.emailRecovery!==false)links.prepend(btn('Google 帳號設定 email 備用密碼',()=>renderAuth('reset'),'button ghost'));
    if(options.emailRecovery===false){links.replaceChildren(p('新版 email 密碼設定尚未開放，請使用已核准的 Google 帳號。','sub'));}
    if(options.legacyUrl){const legacy=el('a','button secondary full','使用原有帳號與教材 → 舊版');legacy.href=options.legacyUrl;main.append(legacy);}
    if(options.demoAccounts===true)main.append(help);

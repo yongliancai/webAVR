@@ -158,7 +158,7 @@ export async function createApp(db,{origin='https://webavr.example',secureCookie
      try{await mailer({to:mail.to,url:mail.url,purpose});}
      catch{await db.transaction(async tx=>{await tx.query('UPDATE auth_private.tokens SET revoked_at=now() WHERE id=$1',[mail.tokenId]);await audit(tx,null,'auth.mail','failed','Delivery adapter failed; token revoked.',requestId);});}
     }
-    // Prototype floor only. A durable async mail queue is still required before SMTP deployment.
+    // Keep account-existence responses uniform; the mail adapter queues durable jobs.
     await delay(Math.max(0,120-(performance.now()-started)));
     return {status:202,headers:responseHeaders,body:{status:'accepted'}};
    }
