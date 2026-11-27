@@ -1,0 +1,1 @@
+export function sceneLabel(s,tours=[]){if(!s)return '';const tour=(Array.isArray(tours)?tours:[]).find(t=>t.id===s.tourId)?.title;const match=/^scene_(\d+)$/.exec(s.title);return tour?tour+' / '+(match?'場景 '+match[1]:s.title):s.title;}

@@ -1,0 +1,13 @@
+.env
+.env.*
+!.env.example
+node_modules/
+private-studio/
+private-demo/
+*.pem
+*.key
+*firebase-adminsdk*.json
+*service-account*.json
+*.log
+*.jsonl
+__pycache__/
