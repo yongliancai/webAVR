@@ -4,6 +4,7 @@ import {resolve} from 'node:path';
 import {openPostgres} from './database.mjs';
 import {createApp} from './app.mjs';
 import {createStudio} from './studio/backend.mjs';
+import {loadAIProviders} from './ai-config.mjs';
 import {createMailDelivery} from './mail-delivery.mjs';
 
 const configPath=process.env.WEBAVR_POSTGRES_CONFIG;
@@ -18,7 +19,7 @@ const db=await openPostgres(config.database);
 const ready=(await db.query("SELECT 1 FROM webavr.schema_versions WHERE version='v1.2-local-auth-api'")).rows.length;
 if(!ready)throw Error('SCHEMA_INITIALIZATION_REQUIRED');
 const delivery=await createMailDelivery(db,config.mail);
-const studio=await createStudio(db,{privateRoot,sourceFile:config.sourceFile?pathToFileURL(resolve(config.sourceFile)):null,tutorProvider:{configured:false},imageProvider:{configured:false,model:'disabled-for-acceptance'}});
+const studio=await createStudio(db,{privateRoot,sourceFile:config.sourceFile?pathToFileURL(resolve(config.sourceFile)):null,...await loadAIProviders(config.ai)});
 const origin='http://localhost:'+port;
 const app=await createApp(db,{origin,secureCookies:false,mailer:delivery.enqueue,studio,google:config.google??null,webRoot:new URL('./public/',import.meta.url)});
 await new Promise((ok,no)=>{app.server.once('error',no);app.server.listen(port,'127.0.0.1',ok);});

@@ -13,11 +13,11 @@
     "sharp": "0.35.5"
   },
   "name": "webavr-learning-studio",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node test.mjs && node test-ui-api.mjs && node test-session-recovery.mjs && node test-editor-reliability.mjs && node test-course-validation.mjs && node test-media-performance.mjs && node test-learner.mjs && node test-learning.mjs && node studio/test-learning-queue.mjs && node studio/test-class-recap.mjs && node studio/test-tutor.mjs && node studio/test-tutor-speech.mjs && node studio/test-image-generation.mjs && node studio/test-share-requests.mjs && node studio/test-acceptance-config.mjs && node test-google-login.mjs && node test-reviewed-answers.mjs && node test-production.mjs",
+    "test": "node test.mjs && node test-ui-api.mjs && node test-session-recovery.mjs && node test-editor-reliability.mjs && node test-course-validation.mjs && node test-media-performance.mjs && node test-learner.mjs && node test-learning.mjs && node studio/test-learning-queue.mjs && node studio/test-class-recap.mjs && node studio/test-tutor.mjs && node studio/test-tutor-speech.mjs && node studio/test-image-generation.mjs && node studio/test-share-requests.mjs && node studio/test-acceptance-config.mjs && node test-google-login.mjs && node test-reviewed-answers.mjs && node test-production.mjs && node test-ai-config.mjs",
     "demo": "node demo.mjs",
     "smoke": "node smoke-demo.mjs",
     "build": "node studio/build.mjs",
@@ -35,7 +35,8 @@
     "test:postgres": "node test-postgres.mjs",
     "test:google": "node test-google-login.mjs",
     "test:answers": "node test-reviewed-answers.mjs",
-    "test:production": "node test-production.mjs"
+    "test:production": "node test-production.mjs",
+    "test:ai-config": "node test-ai-config.mjs"
   },
   "engines": {
     "node": ">=22"

@@ -4,6 +4,7 @@ import {resolve} from 'node:path';
 import {openPostgres} from './database.mjs';
 import {createApp} from './app.mjs';
 import {createStudio} from './studio/backend.mjs';
+import {loadAIProviders} from './ai-config.mjs';
 import {createMailDelivery} from './mail-delivery.mjs';
 import {productionConfig} from './production-config.mjs';
 const configPath=process.env.WEBAVR_POSTGRES_CONFIG;
@@ -14,7 +15,7 @@ const privateRoot=pathToFileURL(resolve(config.privateRoot)+'/');await mkdir(pri
 const db=await openPostgres(config.database);
 if(!(await db.query("SELECT 1 FROM webavr.schema_versions WHERE version='v1.2-local-auth-api'")).rows.length)throw Error('SCHEMA_INITIALIZATION_REQUIRED');
 const delivery=config.mail.mode==='smtp'?await createMailDelivery(db,config.mail):null;
-const studio=await createStudio(db,{privateRoot,sourceFile:config.sourceFile?pathToFileURL(resolve(config.sourceFile)):null,tutorProvider:{configured:false},imageProvider:{configured:false,model:'disabled'}});
+const studio=await createStudio(db,{privateRoot,sourceFile:config.sourceFile?pathToFileURL(resolve(config.sourceFile)):null,...await loadAIProviders(config.ai)});
 const app=await createApp(db,{origin:site.origin,secureCookies:true,mailer:delivery?.enqueue??(async()=>{throw Error('MAIL_DISABLED');}),studio,google:config.google,webRoot:new URL('./public/',import.meta.url),trustLoopbackProxy:true,production:{legacyUrl:site.legacyUrl,emailRecovery:!!delivery}});
 await new Promise((ok,no)=>{app.server.once('error',no);app.server.listen(site.port,site.host,ok);});
 const timer=delivery?setInterval(()=>delivery.tick().catch(()=>{}),2000):null;timer?.unref();
