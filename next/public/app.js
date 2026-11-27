@@ -47,39 +47,62 @@ function payloadText(item){const v=item.payload?.source_fragment??item.payload??
 
 function renderAuth(mode='login',recovery=null){
  version++;root.replaceChildren();const shell=el('div','auth');const story=el('section','auth-story');
- append(story,brand(),append(el('div'),el('h1','','把每一次探索，留成學習的軌跡。'),p('走進教材、連結課堂，讓老師與學生在同一個地方看見學習的發生。')),
+ append(story,brand(),append(el('div'),append(el('h1'),el('span','','把每一次探索，'),el('span','','留成學習的軌跡。')),p('走進教材、連結課堂，讓老師與學生在同一個地方看見學習的發生。')),
   append(el('div','scene-art'),el('div','orbit'),el('div','orbit second'),append(el('div','art-window'),el('span','art-dot'))),el('div','story-foot','探索學習　／　班級連結　／　歷程保存'));
  const main=el('section','auth-main');append(shell,story,main);root.append(shell);main.append(el('div','eyebrow','A SPACE FOR LEARNING'));
  if(recovery){
   const activating=recovery.mode==='activate';main.append(el('h2','',activating?'設定你的新密碼':'重新設定密碼'));main.append(p('完成後請重新登入；原有的登入狀態將失效。','sub'));
   if(!recovery.token){main.append(empty('請從信件開啟連結','此頁沒有有效的設定連結，請回登入頁重新申請。'));main.append(btn('回登入頁',()=>{history.replaceState(null,'','/');renderAuth();},'button secondary full'));return;}
-  const form=el('form');const pass=field('新密碼',{type:'password',autocomplete:'new-password',minLength:15,maxLength:128,hint:'請使用 15–128 個字元，建議採用容易記住的長句。'});const confirm=field('再次輸入新密碼',{type:'password',autocomplete:'new-password',minLength:15,maxLength:128});
-  append(form,pass.wrapper,confirm.wrapper,submit('設定密碼'));
+  const form=el('form','auth-form');const pass=field('新密碼',{type:'password',autocomplete:'new-password',minLength:15,maxLength:128,hint:'請使用 15–128 個字元，建議採用容易記住的長句。'});const confirm=field('再次輸入新密碼',{type:'password',autocomplete:'new-password',minLength:15,maxLength:128});
+  const action=submit('設定密碼');action.classList.add('full');append(form,pass.wrapper,confirm.wrapper,action);
   onSubmit(form,async()=>{if(pass.input.value!==confirm.input.value){formError(form,'兩次輸入的密碼不相同。');return;}await api('/api/auth/'+(activating?'activation-confirm':'password-reset-confirm'),{method:'POST',body:{token:recovery.token,password:pass.input.value}});recovery.token='';form.reset();main.replaceChildren(el('h2','','密碼已更新'),p('請使用剛設定的密碼重新登入。','sub'),btn('前往登入',()=>{history.replaceState(null,'','/');renderAuth();},'button full'));});main.append(form);return;
  }
  const login=mode==='login';main.append(el('h2','',login?'歡迎回來':mode==='activate'?'啟用你的帳號':'設定或重設密碼'));
  main.append(p(login?'登入後，繼續你的學習與教學旅程。':mode==='activate'?'帳號經身分核准後，才能收到設定密碼的連結。':'輸入已核准帳號的信箱。Google 帳號也可在這裡設定 email 備用登入密碼。','sub'));
- const form=el('form');const address=field('帳號信箱',{type:'email',autocomplete:'username',placeholder:'name@example.com'});form.append(address.wrapper);
- let pass;if(login){pass=field('密碼',{type:'password',autocomplete:'current-password'});form.append(pass.wrapper);}
+ const methods=login?el('div','auth-methods'):null;
+ if(methods){methods.setAttribute('aria-label','Google 登入');main.append(methods);}
+ const form=el('form','auth-form');const address=field('帳號信箱',{type:'email',autocomplete:'username',placeholder:'name@example.com'});form.append(address.wrapper);
+ let pass;if(login){
+  pass=field('密碼',{type:'password',autocomplete:'current-password'});pass.input.id='auth-password';
+  const group=el('div','auth-password-group'),head=el('div','auth-password-heading'),title=el('label','','密碼');title.htmlFor=pass.input.id;
+  append(head,title,btn('忘記密碼？',()=>renderAuth('reset'),'button ghost auth-forgot'));append(group,head,pass.input);form.append(group);
+ }
  const action=submit(login?'登入工作室':'申請設定連結');action.classList.add('full');form.append(action);main.append(form);
  onSubmit(form,async()=>{
   if(login){await api('/api/auth/login',{method:'POST',body:{email:address.input.value,password:pass.input.value}});pass.input.value='';const session=await api('/api/auth/session');state.user=session.user;state.csrf=session.csrfToken;authEpoch++;if(state.user.roles.includes('student')&&!isTeacher()&&!isAdmin()){location.assign('/learn');return;}navigate(isAdmin()?'users':'home');}
   else{await api('/api/auth/'+(mode==='activate'?'activation-request':'password-reset-request'),{method:'POST',body:{email:address.input.value}});form.replaceChildren(append(el('div','success'),el('strong','','已收到申請'),p('若帳號符合條件，會收到30分鐘內有效的設定連結，請同時檢查垃圾郵件。若未收到，請稍後再試或聯絡管理員確認身分。')));}
  });
- const links=el('div','links');if(login)append(links,btn('首次使用？啟用帳號',()=>renderAuth('activate'),'button ghost'),btn('忘記密碼',()=>renderAuth('reset'),'button ghost'));else links.append(btn('← 回到登入',()=>renderAuth(),'button ghost'));main.append(links);
- if(login){const authVersion=version,notice=new URLSearchParams(location.search).get('login');
-  if(notice==='google_review')main.prepend(p('Google 身分驗證已完成；此帳號仍需核准連結，尚未開放教材與歷史資料。','sub'));
-  if(notice==='google_failed')main.prepend(p('Google 登入未完成，請重新點選登入；也可使用 email 登入。','sub'));
-  const help=el('details','demo-help');append(help,el('summary','','使用測試帳號體驗'),p('這些帳號只存在於此本機體驗版，不代表真實學生或老師。'));
-  const switches=el('div','switches');for(const [name,title] of [['students','學生'],['teachera','老師'],['admin','管理員']])switches.append(btn(title,()=>{address.input.value=name+'@example.invalid';pass.input.value='Synthetic-long-password-123!';address.input.focus();},'button secondary small'));
-  append(help,switches,p('選擇身分後按「登入工作室」。管理員敏感查詢須填寫用途。'));
-  api('/api/auth/options').then(options=>{if(version!==authVersion||!main.isConnected)return;
-   if(options.google){const link=el('a','button primary full','使用 Google 帳號登入');link.href='/api/auth/google/start';main.insertBefore(link,form);main.insertBefore(p('或使用 email 與密碼','sub'),form);}
-   if(options.google&&options.emailRecovery!==false)links.prepend(btn('Google 帳號設定 email 備用密碼',()=>renderAuth('reset'),'button ghost'));
-   if(options.emailRecovery===false){links.replaceChildren(p('新版 email 密碼設定尚未開放，請使用已核准的 Google 帳號。','sub'));}
-   if(options.legacyUrl){const legacy=el('a','button secondary full','使用原有帳號與教材 → 舊版');legacy.href=options.legacyUrl;main.append(legacy);}
-   if(options.demoAccounts===true)main.append(help);
-  }).catch(()=>{});}
+ if(!login){main.append(btn('← 回到登入',()=>renderAuth(),'button ghost auth-back'));return;}
+ const backup=el('section','auth-backup');backup.hidden=true;append(backup,p('已用 Google 登入？','auth-hint'),btn('設定 email 備用密碼',()=>renderAuth('reset'),'button ghost'));main.append(backup);
+ const help=el('details','auth-help');append(help,el('summary','','需要登入協助？'),p('第一次使用，請先確認帳號已經核准。','auth-hint'),btn('首次使用？啟用帳號',()=>renderAuth('activate'),'button ghost'));main.append(help);
+ const legacyArea=el('div','auth-legacy');legacyArea.hidden=true;main.append(legacyArea);
+ const authVersion=version,notice=new URLSearchParams(location.search).get('login');
+ if(notice==='google_review')main.prepend(p('Google 身分驗證已完成；此帳號仍需核准連結，尚未開放教材與歷史資料。','sub'));
+ if(notice==='google_failed')main.prepend(p('Google 登入未完成，請重新點選登入；也可使用 email 登入。','sub'));
+ const demo=el('details','demo-help');append(demo,el('summary','','使用測試帳號體驗'),p('這些帳號只存在於此本機體驗版，不代表真實學生或老師。'));
+ const switches=el('div','switches');for(const [name,title] of [['students','學生'],['teachera','老師'],['admin','管理員']])switches.append(btn(title,()=>{address.input.value=name+'@example.invalid';pass.input.value='Synthetic-long-password-123!';address.input.focus();},'button secondary small'));
+ append(demo,switches,p('選擇身分後按「登入工作室」。管理員敏感查詢須填寫用途。'));
+ const divider=()=>el('div','auth-divider','或使用 email 與密碼');
+ async function loadOptions(){
+  const loading=el('div','auth-method-status','正在確認登入方式…');loading.setAttribute('role','status');methods.replaceChildren(loading,divider());
+  try{
+   const options=await api('/api/auth/options');if(version!==authVersion||!main.isConnected)return;
+   if(options.google){const link=el('a','button auth-google full','使用 Google 帳號登入');link.href='/api/auth/google/start';methods.replaceChildren(link,divider());}else methods.hidden=true;
+   backup.hidden=!(options.google&&options.emailRecovery!==false);
+   if(options.emailRecovery===false){headRecoveryUnavailable();}
+   if(options.legacyUrl){const legacy=el('a','button secondary full','使用原有帳號與教材 → 舊版');legacy.href=options.legacyUrl;legacyArea.replaceChildren(legacy);legacyArea.hidden=false;}
+   if(options.demoAccounts===true&&!demo.isConnected)main.append(demo);
+  }catch{
+   if(version!==authVersion||!main.isConnected)return;
+   const message=p('暫時無法讀取 Google 登入，請重試或使用 email。','auth-hint');message.setAttribute('role','status');
+   methods.replaceChildren(append(el('div','auth-method-error'),message,btn('重試讀取',loadOptions,'button secondary')),divider());
+  }
+ }
+ function headRecoveryUnavailable(){
+  const forgot=main.querySelector('.auth-forgot');if(forgot)forgot.hidden=true;
+  help.replaceChildren(el('summary','','需要登入協助？'),p('新版 email 密碼設定尚未開放，請使用已核准的 Google 帳號。','auth-hint'));
+ }
+ loadOptions();
 }
 
 function navigate(view){state.view=view;version++;history.replaceState(null,'','/#'+view);renderShell();}
