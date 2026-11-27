@@ -5,6 +5,7 @@ import {setTimeout as delay} from 'node:timers/promises';
 import {readFile} from 'node:fs/promises';
 import {pipeline} from 'node:stream/promises';
 import {createGoogleLogin} from './google-login.mjs';
+import {clientAddress} from './production-config.mjs';
 
 const digest=s=>createHash('sha256').update(s).digest('hex');
 const random=()=>randomBytes(32).toString('base64url');
@@ -44,7 +45,7 @@ export class RateLimiter{
 
 const tutorAudioPath=path=>/^\/api\/learn\/courses\/[a-f0-9-]+\/assistant\/transcribe$/i.test(path);
 const binaryPath=path=>/^\/api\/studio\/uploads\/[a-f0-9-]+\/content$/i.test(path)||tutorAudioPath(path);
-export async function createApp(db,{origin='https://webavr.example',secureCookies=true,mailer,authLimit=10,requestLimit=5,writeLimit=120,limiter=new RateLimiter(),diagnostics=()=>{},webRoot=null,studio=null,google=null,demoAccounts=false}={}){
+export async function createApp(db,{origin='https://webavr.example',secureCookies=true,mailer,authLimit=10,requestLimit=5,writeLimit=120,limiter=new RateLimiter(),diagnostics=()=>{},webRoot=null,studio=null,google=null,demoAccounts=false,trustLoopbackProxy=false,production=null}={}){
  const site=new URL(origin);
  requireThat(site.origin===origin&&!site.username&&!site.password,500,'INVALID_ORIGIN_CONFIG');
  requireThat(secureCookies?site.protocol==='https:':site.protocol==='http:'&&['127.0.0.1','localhost','[::1]'].includes(site.hostname),500,'INVALID_COOKIE_CONFIG');
@@ -55,6 +56,12 @@ export async function createApp(db,{origin='https://webavr.example',secureCookie
  if(webRoot){
   for(const [route,file,mime] of [['/','index.html','text/html'],['/activate','index.html','text/html'],['/reset','index.html','text/html'],['/app.js','app.js','text/javascript'],['/session-recovery.mjs','session-recovery.mjs','text/javascript'],['/draft-recovery.mjs','draft-recovery.mjs','text/javascript'],['/course-schema.mjs','course-schema.mjs','text/javascript'],['/app.css','app.css','text/css'],['/class-learning','class-learning.html','text/html'],['/class-learning.js','class-learning.js','text/javascript'],['/class-learning.css','class-learning.css','text/css'],['/learn','learn.html','text/html'],['/learn.js','learn.js','text/javascript'],['/learn.css','learn.css','text/css'],['/tutor.css','tutor.css','text/css'],['/studio','studio.html','text/html'],['/studio.js','studio.js','text/javascript'],['/studio.css','studio.css','text/css'],['/pannellum.js','pannellum.js','text/javascript'],['/pannellum.css','pannellum.css','text/css'],...['question.png','explore.png','landmark.png','sound.png','video.png'].map(name=>['/icons/'+name,'icons/'+name,'image/png'])])
    webFiles.set(route,{bytes:await readFile(new URL(file,webRoot)),mime});
+ }
+ if(production){
+  const legacy=new URL(production.legacyUrl);
+  requireThat(secureCookies&&legacy.protocol==='https:'&&legacy.origin!==origin,500,'INVALID_PRODUCTION_CONFIG');
+  const safe=legacy.href.replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;');
+  for(const route of ['/','/activate','/reset']){const file=webFiles.get(route);if(file)file.bytes=Buffer.from(file.bytes.toString().replace('<div class="demo-strip">獨立驗收環境 <span>此處操作不會切換正式網站</span></div>',`<div class="demo-strip">webAVR 新版 <span>分階段開放 · <a href="${safe}">原有帳號與教材請進入舊版</a></span></div>`));}
  }
  const dummy=await hash(random(),HASH_OPTIONS);let activeHashJobs=0;
  const withHash=async fn=>{requireThat(activeHashJobs<2,429,'BUSY');activeHashJobs++;try{return await fn();}finally{activeHashJobs--;}};
@@ -121,15 +128,16 @@ export async function createApp(db,{origin='https://webavr.example',secureCookie
     limiter.check(['write:'+ip],writeLimit);
    }
    const pathname=url.pathname;
-   if(method==='GET'&&pathname==='/api/auth/options')return {status:200,headers:responseHeaders,body:{google:!!googleLogin,demoAccounts:demoAccounts===true}};
+   if(method==='GET'&&pathname==='/api/auth/options')return {status:200,headers:responseHeaders,body:{google:!!googleLogin,demoAccounts:demoAccounts===true,...(production?{emailRecovery:production.emailRecovery,legacyUrl:production.legacyUrl}:{})}};
    if(method==='GET'&&googleLogin&&pathname==='/api/auth/google/start'){
     limiter.check(['google-start:'+ip],authLimit);const r=await googleLogin.start();return {...r,headers:{...responseHeaders,...r.headers}};
    }
    if(googleCallback){
     const r=await googleLogin.callback(url,headers);if(r.sessionRaw)r.headers['set-cookie']=[r.headers['set-cookie'],cookie(r.sessionRaw)];delete r.sessionRaw;return {...r,headers:{...responseHeaders,...r.headers}};
    }
-   if(method==='GET'&&pathname==='/api/health')return {status:200,headers:responseHeaders,body:{status:'local-prototype'}};
+   if(method==='GET'&&pathname==='/api/health'){if(production)await db.query('SELECT 1');return {status:200,headers:responseHeaders,body:{status:production?'ok':'local-prototype'}};}
    if(method==='POST'&&['/api/auth/activation-request','/api/auth/password-reset-request'].includes(pathname)){
+    requireThat(!production||production.emailRecovery,503,'MAIL_UNAVAILABLE');
     const started=performance.now();
     fields(body,['email']);const address=email(body.email);const activate=pathname.includes('activation');const purpose=activate?'activate':'reset_password';
     limiter.check(['request-ip:'+ip,'request-email:'+address],requestLimit);
@@ -362,7 +370,7 @@ export async function createApp(db,{origin='https://webavr.example',secureCookie
    }
    req.setTimeout(req.method==='POST'?30000:120000,()=>{controller.abort();req.destroy();});req.once('end',()=>req.setTimeout(180000));const binary=req.method==='POST'&&binaryPath(pathname);let body={};
    if(!binary){let length=0;const chunks=[];for await(const chunk of req){length+=chunk.length;if(length>(pathname==='/api/studio/media'?24002000:pathname.startsWith('/api/studio/')?1600000:16384))throw error(413,'BODY_TOO_LARGE');chunks.push(chunk);}if(length)try{body=JSON.parse(Buffer.concat(chunks));}catch{throw error(400,'INVALID_JSON');}}
-   const output=await dispatch({method:req.method,path:req.url,headers:req.headers,body,ip:req.socket.remoteAddress,uploadStream:binary?req:undefined,signal:controller.signal});
+   const output=await dispatch({method:req.method,path:req.url,headers:req.headers,body,ip:clientAddress(req.socket.remoteAddress,req.headers,trustLoopbackProxy),uploadStream:binary?req:undefined,signal:controller.signal});
    if(res.destroyed)return;res.writeHead(output.status,{...output.headers,...(binary&&output.status>=400?{connection:'close'}:{})});
    if(output.stream)await pipeline(output.stream(),res);else res.end(output.binary??JSON.stringify(output.body));
   }catch(e){if(res.destroyed)return;if(res.headersSent){res.destroy();return;}const requestId=randomUUID();res.writeHead(e.status??400,{'content-type':'application/json','cache-control':'no-store',connection:'close'});res.end(JSON.stringify({error:{code:e.code??'INVALID_REQUEST',message:'Request rejected',requestId}}));}finally{if(mediaSlot)incomingMedia--;}

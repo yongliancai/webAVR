@@ -4,7 +4,7 @@ import {clearRecoveryForUser} from './draft-recovery.mjs';
 const root=document.querySelector('#root');
 const state={user:null,csrf:'',audit:'',view:'home',classId:'',archiveMode:'self'};
 let version=0,authEpoch=0,noticeTimer;
-const messages={NETWORK:'連線未完成，請檢查網路後重試。',SESSION_CHANGED:'另一個分頁已切換帳號，請在新分頁登入原帳號後重試；本頁輸入仍保留。',SESSION_SYNC_FAILED:'暫時無法同步登入資訊，請稍後重試。',INVALID_EMAIL:'請填寫完整且有效的帳號信箱。',INVALID_LOGIN:'帳號或密碼不正確，或帳號尚未啟用。',UNAUTHENTICATED:'登入已失效，請重新登入。',FORBIDDEN:'你目前沒有執行這項操作的權限。',NOT_FOUND:'找不到此資料，或你沒有讀取權限。',RATE_LIMITED:'操作次數較多，請稍後再試。',BUSY:'系統正在處理其他請求，請稍後重試。',CSRF_DENIED:'登入連線再次更新，請稍後再試；本頁輸入仍保留。',INVALID_PASSWORD:'密碼需為 15–128 個字元，且不超過 512 bytes。',INVALID_TOKEN:'連結已使用、過期或失效，請重新申請。',IDENTITY_REVIEW_REQUIRED:'此帳號仍需核實身分，暫時無法啟用。',MEMBERSHIP_EXISTS:'這位成員已在班級內。',INVALID_FIELDS:'請確認輸入欄位後重試。',INVALID_TIME:'請填寫有效且明確的發生時間。',UNVERIFIED_CLASS_CONTEXT:'此時間的學生班級或課程關係無法核實，請重新確認。',CHAT_SCOPE_LOCKED:'私人對話不能改為班級學習紀錄。',ARCHIVE_TYPE_REQUIRES_SPECIAL_REVIEW:'此類來源需要另外處理，不能直接開放給學生。',REQUEST_ID_CONFLICT:'這項操作的內容已變更，請重新送出。'};
+const messages={MAIL_UNAVAILABLE:'新版寄信尚未開放，請使用 Google 登入或進入舊版。',NETWORK:'連線未完成，請檢查網路後重試。',SESSION_CHANGED:'另一個分頁已切換帳號，請在新分頁登入原帳號後重試；本頁輸入仍保留。',SESSION_SYNC_FAILED:'暫時無法同步登入資訊，請稍後重試。',INVALID_EMAIL:'請填寫完整且有效的帳號信箱。',INVALID_LOGIN:'帳號或密碼不正確，或帳號尚未啟用。',UNAUTHENTICATED:'登入已失效，請重新登入。',FORBIDDEN:'你目前沒有執行這項操作的權限。',NOT_FOUND:'找不到此資料，或你沒有讀取權限。',RATE_LIMITED:'操作次數較多，請稍後再試。',BUSY:'系統正在處理其他請求，請稍後重試。',CSRF_DENIED:'登入連線再次更新，請稍後再試；本頁輸入仍保留。',INVALID_PASSWORD:'密碼需為 15–128 個字元，且不超過 512 bytes。',INVALID_TOKEN:'連結已使用、過期或失效，請重新申請。',IDENTITY_REVIEW_REQUIRED:'此帳號仍需核實身分，暫時無法啟用。',MEMBERSHIP_EXISTS:'這位成員已在班級內。',INVALID_FIELDS:'請確認輸入欄位後重試。',INVALID_TIME:'請填寫有效且明確的發生時間。',UNVERIFIED_CLASS_CONTEXT:'此時間的學生班級或課程關係無法核實，請重新確認。',CHAT_SCOPE_LOCKED:'私人對話不能改為班級學習紀錄。',ARCHIVE_TYPE_REQUIRES_SPECIAL_REVIEW:'此類來源需要另外處理，不能直接開放給學生。',REQUEST_ID_CONFLICT:'這項操作的內容已變更，請重新送出。'};
 const label={student:'學生',teacher:'老師',admin:'管理員',active:'使用中',pending_activation:'待啟用',needs_review:'待核實',disabled:'已停用',archived:'已封存',private:'私人',course_support:'課程助理',legacy:'歷史',learning:'班級學習',verified:'已核准',withheld:'暫不開放'};
 const categories={legacy_message:'舊對話',account_chatLog:'舊對話副本',modern_message:'對話紀錄',legacy_siraya_message:'文化學習對話',position_event:'觀看紀錄',account_userPositionLog:'觀看紀錄副本',legacy_click:'點擊紀錄',account_userClickHotSpot:'熱點探索',account_userClickButton:'操作紀錄',account_mutiAnswerLog:'作答紀錄',account_exploreLog:'探索紀錄',question_definition:'教材與題目來源'};
 const chatKinds=new Set(['legacy_message','account_chatLog','modern_message','legacy_siraya_message']);
@@ -75,6 +75,8 @@ function renderAuth(mode='login',recovery=null){
   append(help,switches,p('選擇身分後按「登入工作室」。管理員敏感查詢須填寫用途。'));
   api('/api/auth/options').then(options=>{if(version!==authVersion||!main.isConnected)return;
    if(options.google){const link=el('a','button primary full','使用 Google 帳號登入');link.href='/api/auth/google/start';main.insertBefore(link,form);main.insertBefore(p('或使用 email 與密碼','sub'),form);}
+   if(options.emailRecovery===false){links.replaceChildren(p('新版 email 密碼設定尚未開放，請使用已核准的 Google 帳號。','sub'));}
+   if(options.legacyUrl){const legacy=el('a','button secondary full','使用原有帳號與教材 → 舊版');legacy.href=options.legacyUrl;main.append(legacy);}
    if(options.demoAccounts===true)main.append(help);
   }).catch(()=>{});}
 }
