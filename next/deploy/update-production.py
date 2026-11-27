@@ -30,8 +30,12 @@ with (root/'deployment-build.log').open('a') as log:
  run('npm','ci','--no-audit','--no-fund',cwd=work,stdout=log,stderr=subprocess.STDOUT);run('npm','run','build',cwd=work,stdout=log,stderr=subprocess.STDOUT)
 run(str(root/'backup-production.sh'))
 ecoPath=root/'ecosystem.json';original=ecoPath.read_text();eco=json.loads(original);eco['apps'][0]['cwd']=str(work);ecoPath.write_text(json.dumps(eco))
+def switch_runtime():
+ # PM2 reload can retain the old absolute script path across release directories.
+ subprocess.run(['pm2','delete','webavr-production'],env=env,check=False,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+ run('pm2','start',str(ecoPath))
 try:
- run('pm2','startOrReload',str(ecoPath),'--update-env')
+ switch_runtime()
  for _ in range(40):
   if healthy():break
   time.sleep(.5)
@@ -41,4 +45,4 @@ try:
  if pathlib.Path(actual['pm_cwd'])!=work or not actual['pm_exec_path'].endswith('/serve-production.mjs'):raise RuntimeError('Unexpected runtime path')
  run('pm2','save');version=json.loads((work/'package.json').read_text())['version'];(root/'version.json').write_text(json.dumps({**old,'version':version,'commit':args.commit}));print(json.dumps({'updated':True,'version':version,'commit':args.commit,'databaseRestored':False}))
 except Exception:
- ecoPath.write_text(original);run('pm2','startOrReload',str(ecoPath),'--update-env');run('pm2','save');raise
+ ecoPath.write_text(original);switch_runtime();run('pm2','save');raise
