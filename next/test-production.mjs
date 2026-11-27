@@ -22,5 +22,11 @@ try{
  assert.equal((await db.query('SELECT count(*)::int AS n FROM auth_private.tokens')).rows[0].n,0);
  assert.equal((await post('https://www.webavr.com','/api/auth/login',{})).status,403);
  for(const path of ['/test/teacher','/test/student'])assert.notEqual((await app.dispatch({path})).status,200);
+ await new Promise(ok=>app.server.listen(0,'127.0.0.1',ok));
+ try{
+  const url='http://127.0.0.1:'+app.server.address().port;
+  const page=await (await fetch(url)).text();assert(page.includes('https://www.webavr.com/'));assert(!page.includes('此處操作不會切換正式網站'));
+  const login=await fetch(url+'/api/auth/login',{method:'POST',headers:{origin:base.origin,'content-type':'application/json'},body:JSON.stringify({email:'admin@example.invalid',password:'Synthetic-long-password-123!'})});assert.equal(login.status,200);const cookie=login.headers.get('set-cookie');assert(cookie.startsWith('__Host-webavr_session='));assert(cookie.includes('Secure'));assert(cookie.includes('HttpOnly'));assert(cookie.includes('SameSite=Strict'));assert(!cookie.includes('Domain='));
+ }finally{await new Promise(ok=>app.server.close(ok));}
  console.log('Production configuration, secure cookie, proxy trust, disabled mail, CSRF and test-route isolation checks passed.');
 }finally{await db.close();}
